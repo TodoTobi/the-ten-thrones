@@ -4,116 +4,116 @@ import { RealmConfig } from '../core/types';
 import { PostProcessingPipeline } from './PostProcessingPipeline';
 
 export class RivalHand3D {
-  private armRoot: THREE.Group;
-  private upperArmMesh!: THREE.Mesh;
-  private elbowJointMesh!: THREE.Mesh;
-  private forearmMesh!: THREE.Mesh;
-  private handWristGroup = new THREE.Group();
-  private fingers: THREE.Mesh[] = [];
+  private puppetRoot = new THREE.Group();
+  private wristGroup = new THREE.Group();
+  private fingerGroups: THREE.Group[] = [];
+  private puppetStrings: THREE.Line[] = [];
+  private commandAuraRing!: THREE.Mesh;
 
-  // Punto de anclaje anatómico en el hombro derecho del trono
-  private shoulderAnchor = new THREE.Vector3(2.1, 3.9, -7.4);
-  // Posición de reposo sobre el apoyabrazos derecho del trono
-  private armrestPosition = new THREE.Vector3(1.9, 1.35, -6.2);
+  private hoverRestPos = new THREE.Vector3(0, 6.8, -4.5);
+  public onBossOrderGesture?: (active: boolean) => void;
 
   constructor(scene: THREE.Scene) {
-    this.armRoot = new THREE.Group();
-    this.armRoot.visible = false;
-    scene.add(this.armRoot);
+    this.puppetRoot.visible = false;
+    scene.add(this.puppetRoot);
   }
 
   public configureForRealm(realm: RealmConfig): void {
-    while (this.armRoot.children.length > 0) {
-      const child = this.armRoot.children[0] as THREE.Mesh;
-      child.geometry?.dispose();
-      this.armRoot.remove(child);
+    while (this.puppetRoot.children.length > 0) {
+      const child = this.puppetRoot.children[0];
+      this.puppetRoot.remove(child);
     }
-    this.handWristGroup.clear();
-    this.fingers = [];
+    this.wristGroup.clear();
+    this.fingerGroups = [];
+    this.puppetStrings = [];
 
-    const { skinColor, armorColor, ringColor, scale } = realm.handAppearance;
+    const { armorColor, ringColor, scale } = realm.handAppearance;
 
-    const skinMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.55, metalness: 0.1 });
-    const armorMat = new THREE.MeshStandardMaterial({ color: armorColor, roughness: 0.28, metalness: 0.82 });
-    const ringMat = new THREE.MeshStandardMaterial({
+    const gauntletMat = new THREE.MeshStandardMaterial({
+      color: armorColor,
+      roughness: 0.25,
+      metalness: 0.88,
+    });
+    const jointMat = new THREE.MeshStandardMaterial({
+      color: realm.palette.secondary,
+      roughness: 0.4,
+      metalness: 0.6,
+    });
+    const glowMat = new THREE.MeshBasicMaterial({
       color: ringColor,
-      roughness: 0.15,
-      metalness: 0.9,
-      emissive: ringColor,
-      emissiveIntensity: 0.35,
+      transparent: true,
+      opacity: 0.75,
+      side: THREE.DoubleSide,
     });
 
-    // 1. Brazo Superior (Hombro a Codo) y Codera
-    const limbGeo = new THREE.CylinderGeometry(0.32, 0.26, 1, 16);
-    limbGeo.rotateX(Math.PI / 2);
-    this.upperArmMesh = new THREE.Mesh(limbGeo, armorMat);
-    this.upperArmMesh.castShadow = true;
+    // 1. Dorso de la Mano de Títere Esculpido y Muñequera Real
+    const palmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.24, 0.92), gauntletMat);
+    palmMesh.castShadow = true;
+    this.wristGroup.add(palmMesh);
 
-    this.elbowJointMesh = new THREE.Mesh(new THREE.SphereGeometry(0.34, 16, 16), armorMat);
-    this.elbowJointMesh.castShadow = true;
+    const cuffMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.46, 0.65, 16), gauntletMat);
+    cuffMesh.rotation.x = Math.PI / 2.2;
+    cuffMesh.position.set(0, 0.22, -0.62);
+    this.wristGroup.add(cuffMesh);
 
-    // 2. Antebrazo Acorazado (Codo a Muñeca)
-    this.forearmMesh = new THREE.Mesh(limbGeo.clone(), armorMat);
-    this.forearmMesh.castShadow = true;
+    // Sello rúnico flotante sobre el dorso de la mano de títere
+    this.commandAuraRing = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.56, 6), glowMat);
+    this.commandAuraRing.rotation.x = -Math.PI / 2;
+    this.commandAuraRing.position.set(0, 0.35, -0.1);
+    PostProcessingPipeline.markForSelectiveBloom(this.commandAuraRing);
+    this.wristGroup.add(this.commandAuraRing);
 
-    // 3. Mano Anatómica y Dedos Articulados
-    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.26, 0.82), skinMat);
-    palm.castShadow = true;
-    this.handWristGroup.add(palm);
+    // 2. Cinco Dedos Articulados de Marioneta (con falanges y nudillos esféricos)
+    for (let i = 0; i < 5; i++) {
+      const fingerRoot = new THREE.Group();
+      const isThumb = i === 0;
+      if (isThumb) {
+        fingerRoot.position.set(-0.48, -0.05, 0.18);
+        fingerRoot.rotation.y = 0.45;
+      } else {
+        fingerRoot.position.set(-0.36 + (i - 1) * 0.24, -0.04, 0.46);
+      }
 
-    for (let i = 0; i < 4; i++) {
-      const fingerGeo = new THREE.CylinderGeometry(0.075, 0.065, 0.58, 12);
-      fingerGeo.rotateX(Math.PI / 2.3);
-      const finger = new THREE.Mesh(fingerGeo, skinMat);
-      finger.position.set(-0.27 + i * 0.18, -0.12, 0.48);
-      finger.castShadow = true;
-      this.fingers.push(finger);
-      this.handWristGroup.add(finger);
+      const knuckle = new THREE.Mesh(new THREE.SphereGeometry(0.085, 12, 12), jointMat);
+      const phalanx1 = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.065, 0.38, 12), gauntletMat);
+      phalanx1.rotation.x = Math.PI / 2.4;
+      phalanx1.position.set(0, -0.12, 0.18);
+
+      const phalanx2 = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.34, 12), gauntletMat);
+      phalanx2.rotation.x = Math.PI / 1.8;
+      phalanx2.position.set(0, -0.32, 0.34);
+
+      fingerRoot.add(knuckle, phalanx1, phalanx2);
+      this.fingerGroups.push(fingerRoot);
+      this.wristGroup.add(fingerRoot);
     }
 
-    // Pulgar oponible
-    const thumbGeo = new THREE.CylinderGeometry(0.08, 0.07, 0.46, 10);
-    thumbGeo.rotateZ(-Math.PI / 4);
-    const thumb = new THREE.Mesh(thumbGeo, skinMat);
-    thumb.position.set(-0.42, -0.1, 0.2);
-    this.fingers.push(thumb);
-    this.handWristGroup.add(thumb);
+    // 3. Hilos de Títere Luminosos (conectan cada dedo y la muñeca con el cielo del salón)
+    const stringMat = new THREE.LineBasicMaterial({
+      color: realm.palette.primary,
+      transparent: true,
+      opacity: 0.85,
+    });
 
-    // Anillo real emisivo
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.095, 0.03, 10, 20), ringMat);
-    ring.position.set(0.09, -0.04, 0.36);
-    PostProcessingPipeline.markForSelectiveBloom(ring);
-    this.handWristGroup.add(ring);
-    this.handWristGroup.scale.setScalar(scale);
+    const stringAnchors = [
+      new THREE.Vector3(0, 0.25, -0.4),     // Hilo maestro de la muñeca
+      new THREE.Vector3(-0.36, 0, 0.65),    // Índice
+      new THREE.Vector3(-0.12, 0, 0.68),    // Medio
+      new THREE.Vector3(0.12, 0, 0.68),     // Anular
+      new THREE.Vector3(0.36, 0, 0.65),     // Meñique
+    ];
 
-    this.armRoot.add(this.upperArmMesh, this.elbowJointMesh, this.forearmMesh, this.handWristGroup);
-    this.solveArmIK(this.armrestPosition);
-  }
+    stringAnchors.forEach((anchor) => {
+      const pts = [anchor, new THREE.Vector3(anchor.x * 1.4, 14.0, anchor.z - 2.2)];
+      const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+      const line = new THREE.Line(lineGeo, stringMat);
+      PostProcessingPipeline.markForSelectiveBloom(line);
+      this.puppetStrings.push(line);
+      this.wristGroup.add(line);
+    });
 
-  /**
-   * Calcula la posición anatómica del codo y orienta el brazo superior y el antebrazo
-   * desde el hombro del gobernante hasta la posición actual de la mano.
-   */
-  private solveArmIK(wristPos: THREE.Vector3): void {
-    this.handWristGroup.position.copy(wristPos);
-
-    // El codo se curva ligeramente hacia afuera y arriba para no atravesar las piezas del tablero
-    const midPoint = new THREE.Vector3().lerpVectors(this.shoulderAnchor, wristPos, 0.48);
-    const elbowPos = midPoint.add(new THREE.Vector3(1.15, 0.65, -0.4));
-
-    this.elbowJointMesh.position.copy(elbowPos);
-
-    // Orientar y escalar Húmero (Hombro -> Codo)
-    const upperDist = this.shoulderAnchor.distanceTo(elbowPos);
-    this.upperArmMesh.position.lerpVectors(this.shoulderAnchor, elbowPos, 0.5);
-    this.upperArmMesh.scale.set(1, 1, upperDist);
-    this.upperArmMesh.lookAt(elbowPos);
-
-    // Orientar y escalar Antebrazo (Codo -> Muñeca)
-    const foreDist = elbowPos.distanceTo(wristPos);
-    this.forearmMesh.position.lerpVectors(elbowPos, wristPos, 0.5);
-    this.forearmMesh.scale.set(1, 1, foreDist);
-    this.forearmMesh.lookAt(wristPos);
+    this.wristGroup.scale.setScalar(scale);
+    this.puppetRoot.add(this.wristGroup);
   }
 
   public async executeRivalMoveSequence(
@@ -124,27 +124,35 @@ export class RivalHand3D {
     speedMultiplier = 1.0,
     onCaptureMoment?: () => void
   ): Promise<void> {
-    this.armRoot.visible = true;
-    const grabOffset = new THREE.Vector3(0, 1.15, -0.15);
+    // 1. El Jefe en el trono levanta su brazo dando la orden imperial
+    this.onBossOrderGesture?.(true);
+    await new Promise((r) => setTimeout(r, 260 / speedMultiplier));
+
+    this.puppetRoot.visible = true;
+    const grabOffset = new THREE.Vector3(0, 1.18, -0.15);
     const hoverFrom = fromWorld.clone().add(grabOffset);
     const hoverTo = toWorld.clone().add(grabOffset);
 
-    // 1. Preparar brazo y extender desde el apoyabrazos hacia la pieza
-    await this.tweenVector(this.armrestPosition, hoverFrom, 440 / speedMultiplier, (pos) => {
-      this.solveArmIK(pos);
+    // 2. La Mano de Títere desciende colgada de sus hilos hacia la pieza
+    await this.tweenVector(this.hoverRestPos, hoverFrom, 440 / speedMultiplier, (pos, t) => {
+      this.wristGroup.position.copy(pos);
+      this.wristGroup.rotation.z = Math.sin(t * Math.PI) * 0.08; // Balanceo de marioneta
+      this.commandAuraRing.rotation.z += 0.08;
     });
 
-    // 2. Cerrar dedos sobre la pieza
-    this.setGrip(true);
-    await new Promise((r) => setTimeout(r, 85 / speedMultiplier));
+    // 3. Cierra las falanges articuladas sobre la pieza
+    this.setPuppetGrip(true);
+    await new Promise((r) => setTimeout(r, 95 / speedMultiplier));
 
-    // 3. Elevar y desplazar pieza manteniendo toda la cadena Hombro-Codo-Mano conectada
+    // 4. Eleva y transporta la pieza obedeciendo la orden del Gobernante
     await this.tweenProgress(540 / speedMultiplier, (t) => {
       const currentPiece = new THREE.Vector3().lerpVectors(fromWorld, toWorld, t);
-      currentPiece.y += Math.sin(t * Math.PI) * 1.1;
+      currentPiece.y += Math.sin(t * Math.PI) * 1.15;
 
       pieceMesh.position.copy(currentPiece);
-      this.solveArmIK(currentPiece.clone().add(grabOffset));
+      this.wristGroup.position.copy(currentPiece).add(grabOffset);
+      this.wristGroup.rotation.x = Math.sin(t * Math.PI) * 0.14;
+      this.commandAuraRing.rotation.z += 0.1;
 
       if (t >= 0.75 && capturedMesh && capturedMesh.visible) {
         capturedMesh.visible = false;
@@ -152,23 +160,25 @@ export class RivalHand3D {
       }
     });
 
-    // 4. Depositar pieza y abrir dedos
+    // 5. Suelta la pieza y el Jefe baja el brazo en el trono
     pieceMesh.position.copy(toWorld);
-    this.setGrip(false);
-    await new Promise((r) => setTimeout(r, 80 / speedMultiplier));
+    this.setPuppetGrip(false);
+    this.onBossOrderGesture?.(false);
+    await new Promise((r) => setTimeout(r, 85 / speedMultiplier));
 
-    // 5. Retirar brazo hacia el apoyabrazos del trono
-    await this.tweenVector(hoverTo, this.armrestPosition, 390 / speedMultiplier, (pos) => {
-      this.solveArmIK(pos);
+    // 6. La Mano de Títere asciende de regreso hacia las sombras
+    await this.tweenVector(hoverTo, this.hoverRestPos, 380 / speedMultiplier, (pos) => {
+      this.wristGroup.position.copy(pos);
     });
 
-    this.armRoot.visible = false;
+    this.puppetRoot.visible = false;
   }
 
-  private setGrip(closed: boolean): void {
-    const rot = closed ? 0.48 : 0;
-    this.fingers.forEach((f) => {
-      f.rotation.x = rot;
+  private setPuppetGrip(closed: boolean): void {
+    const angle = closed ? 0.52 : 0.0;
+    this.fingerGroups.forEach((fg, idx) => {
+      if (idx === 0) fg.rotation.z = closed ? -0.45 : 0;
+      else fg.rotation.x = angle;
     });
   }
 
@@ -176,11 +186,11 @@ export class RivalHand3D {
     from: THREE.Vector3,
     to: THREE.Vector3,
     durationMs: number,
-    onUpdate: (v: THREE.Vector3) => void
+    onUpdate: (v: THREE.Vector3, t: number) => void
   ): Promise<void> {
     return this.tweenProgress(durationMs, (t) => {
       const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-      onUpdate(new THREE.Vector3().lerpVectors(from, to, eased));
+      onUpdate(new THREE.Vector3().lerpVectors(from, to, eased), t);
     });
   }
 

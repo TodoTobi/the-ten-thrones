@@ -158,10 +158,8 @@ export class Board3D {
   public setCameraPreset(preset: 'gameplay' | 'cinematic' | 'top'): void {
 
     if (preset === 'gameplay') {
-
-      this.camera.position.set(0, 8.2, 9.2);
-
-      this.controls.target.set(0, 0.2, -0.5);
+      this.camera.position.set(0, 6.8, 9.5);
+      this.controls.target.set(0, 0.8, -2.2);
 
     } else if (preset === 'cinematic') {
 

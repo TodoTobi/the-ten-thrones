@@ -196,7 +196,6 @@
 
       <!-- Teatro Central del Rival Sentado frente al Tablero + Globo de Diálogo -->
       <div class="hud-boss-theater">
-        <div id="hud-boss-avatar-mount"></div>
         <div id="rival-speech-bubble">
           <span id="rival-sound-cue" style="font-size:0.76rem; color:var(--gold); display:block; margin-bottom:4px;"></span>
           <span id="rival-dialogue-text" style="font-size:0.96rem; line-height:1.4;"></span>
@@ -366,6 +365,21 @@
       <h2 id="match-end-title" style="color:var(--gold); font-size:2.2rem; margin-bottom:10px;"></h2>
       <p id="match-end-subtitle" style="margin-bottom:20px;"></p>
       <button id="btn-match-end-menu" class="btn-primary">VOLVER A LOS REINOS</button>
+    </div>
+  </div>
+
+  <!-- OVERLAY DE CINEMÁTICA DE JEFE FINAL -->
+  <div id="boss-intro-cutscene-overlay" class="game-screen hidden" style="padding:0; justify-content:space-between; pointer-events:auto; cursor:pointer;">
+    <!-- Barra Negra Superior Letterbox -->
+    <div style="height:13vh; background:linear-gradient(180deg, #000000 70%, transparent 100%); width:100%; display:flex; align-items:center; justify-content:flex-end; padding:0 36px;">
+      <span style="font-size:0.78rem; color:#a89f91; letter-spacing:2px;">CLIC O ESPACIO PARA OMITIR CINEMÁTICA</span>
+    </div>
+
+    <!-- Placa Intimidante de Presentación de Jefe Final -->
+    <div style="height:22vh; background:linear-gradient(0deg, #000000 75%, transparent 100%); width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:0 24px;">
+      <div id="cutscene-boss-title" style="color:var(--gold); font-size:0.95rem; letter-spacing:4px; margin-bottom:4px;"></div>
+      <h1 id="cutscene-boss-name" style="color:#ffffff; font-size:2.8rem; letter-spacing:7px; text-shadow:0 0 24px rgba(212,175,55,0.65); border-bottom:2px solid var(--gold); padding-bottom:6px; margin-bottom:8px;"></h1>
+      <p id="cutscene-boss-quote" style="color:#dfd4c3; font-style:italic; font-size:1.05rem; max-width:680px;"></p>
     </div>
   </div>
 

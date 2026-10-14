@@ -2,6 +2,7 @@
 import { REALMS_CONFIG } from '../config/realms.config';
 import { CharacterAnimationState, DifficultyLevel, PieceSymbol, RealmConfig } from '../core/types';
 import { RivalAvatar2D } from '../rendering/RivalAvatar2D';
+import { AnimeBossThroneActor } from '../rendering/AnimeBossThroneActor';
 import { SaveProfileData } from './SaveSystem';
 
 export class UIManager {
@@ -68,8 +69,9 @@ export class UIManager {
       const thumb = document.createElement('button');
       thumb.type = 'button';
       thumb.className = `boss-roster-thumb ${isUnlocked ? 'unlocked' : 'locked'} ${isSelected ? 'active' : ''}`;
+      const portraitUrl = AnimeBossThroneActor.renderPortraitDataURL(realm);
       thumb.innerHTML = `
-        <div class="thumb-portrait">${RivalAvatar2D.generateMiniPortraitSVG(realm.id)}</div>
+        <div class="thumb-portrait"><img src="${portraitUrl}" alt="${realm.rivalName}" style="width:100%;height:100%;object-fit:cover;"/></div>
         <span class="thumb-order">I${realm.order}</span>
         <span class="thumb-name">${realm.rivalName.split(' ')[0]}</span>
       `;
@@ -85,8 +87,11 @@ export class UIManager {
     const best = this.profile.stats.bestResultByRealm[realm.id] || 'SIN DISPUTAR';
 
     // 1. Actualizar Retrato Principal de Medio Cuerpo
-    this.selectorBossAvatar.renderBossForRealm(realm);
-    this.selectorBossAvatar.setAnimationState('Confident');
+    const heroMount = document.getElementById('selector-boss-hero-mount');
+    if (heroMount) {
+      const heroUrl = AnimeBossThroneActor.renderPortraitDataURL(realm);
+      heroMount.innerHTML = `<img src="${heroUrl}" alt="${realm.rivalName}" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 18px 36px rgba(0,0,0,0.95));"/>`;
+    }
 
     // 2. Actualizar Ficha Editorial del Reino
     this.setText('sel-realm-order', `TRONO ${realm.order} DE X — ${realm.civilization.toUpperCase()}`);
