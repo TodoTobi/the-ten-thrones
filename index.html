@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>THE TEN THRONES — Fantasy 3D Chess</title>
+  <style>
+    :root {
+      --gold: #d4af37;
+      --gold-bright: #ffe17d;
+      --bg-obsidian: rgba(10, 8, 14, 0.9);
+      --border-ornate: rgba(212, 175, 55, 0.55);
+      --text-ivory: #f5efe6;
+      --ui-scale: 1;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background: #050408; font-family: 'Georgia', serif; color: var(--text-ivory); }
+    #webgl-viewport { position: fixed; inset: 0; z-index: 1; }
+    .game-screen { position: fixed; inset: 0; z-index: 10; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 24px 32px; }
+    .hidden { display: none !important; }
+
+    .interactive-panel { pointer-events: auto; background: var(--bg-obsidian); border: 1px solid var(--border-ornate); box-shadow: 0 16px 40px rgba(0,0,0,0.85), inset 0 0 24px rgba(212,175,55,0.06); backdrop-filter: blur(10px); border-radius: 4px; padding: 18px 22px; }
+    .btn-primary { pointer-events: auto; background: linear-gradient(180deg, #3d2c10 0%, #1a1206 100%); color: var(--gold-bright); border: 1px solid var(--gold); padding: 12px 24px; font-family: inherit; font-weight: bold; letter-spacing: 1.8px; cursor: pointer; transition: all 0.18s ease; text-transform: uppercase; }
+    .btn-primary:hover:not(:disabled) { background: linear-gradient(180deg, #594118 0%, #2b1d09 100%); box-shadow: 0 0 18px rgba(212,175,55,0.35); transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: 0.38; cursor: not-allowed; }
+
+    /* Menú Principal */
+    #main-menu { align-items: center; justify-content: center; text-align: center; background: radial-gradient(circle, rgba(0,0,0,0.3) 0%, rgba(5,4,8,0.85) 100%); }
+    .game-title { font-size: 3.6rem; color: var(--gold); letter-spacing: 6px; text-shadow: 0 4px 20px rgba(0,0,0,0.9); margin-bottom: 8px; }
+    .game-subtitle { font-size: 1.1rem; color: #c7bca8; margin-bottom: 32px; letter-spacing: 2px; }
+    .menu-actions { display: flex; flex-direction: column; gap: 14px; width: 320px; }
+
+    /* ESCENARIO DEL JEFE EN EL HUD (Medio Cuerpo Detrás del Tablero + Globo Vinculado al Rostro) */
+    .hud-boss-theater { position: relative; display: flex; align-items: center; justify-content: center; pointer-events: none; margin: -12px auto 0 auto; }
+    #hud-boss-avatar-mount { width: 250px; height: 260px; filter: drop-shadow(0 12px 28px rgba(0,0,0,0.95)); pointer-events: auto; }
+    .boss-full-svg { width: 100%; height: 100%; overflow: visible; }
+    .boss-pupil { transition: transform 0.35s ease-out; }
+    .boss-eyelid { transition: opacity 0.08s ease; }
+
+    /* Animaciones Corporales y Faciales por Estado Emocional */
+    .layer-torso-breath { transform-origin: 210px 400px; animation: bossBreath 4.2s infinite ease-in-out; }
+    @keyframes bossBreath { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.018) translateY(-2px); } }
+
+    /* Estado: Thinking / DeepThinking (Inclinación reflexiva y mano a la barbilla) */
+    .boss-stage-wrapper[data-state="Thinking"] .layer-head-pose,
+    .boss-stage-wrapper[data-state="DeepThinking"] .layer-head-pose { transform-origin: 210px 230px; transform: rotate(3.5deg) translateY(4px); transition: transform 0.5s ease; }
+    .boss-stage-wrapper[data-state="Thinking"] .arm-right,
+    .boss-stage-wrapper[data-state="DeepThinking"] .arm-right { transform-origin: 338px 315px; transform: rotate(-28deg) translate(-45px, -85px); transition: transform 0.5s ease; }
+
+    /* Estado: Check (Sorpresa/Furia + Golpe en el Apoyabrazos del Trono) */
+    .boss-stage-wrapper[data-state="Check"] .brow-left { transform-origin: 180px 145px; transform: rotate(12deg) translateY(3px); }
+    .boss-stage-wrapper[data-state="Check"] .brow-right { transform-origin: 240px 145px; transform: rotate(-12deg) translateY(3px); }
+    .boss-stage-wrapper[data-state="Check"] .mouth-neutral { opacity: 0; }
+    .boss-stage-wrapper[data-state="Check"] .mouth-frown { opacity: 1; }
+    .boss-stage-wrapper[data-state="Check"] .arm-right { animation: fistSlamArmrest 0.55s ease-in-out 2; transform-origin: 338px 315px; }
+    @keyframes fistSlamArmrest { 0%, 100% { transform: translateY(0); } 35% { transform: translateY(-38px) rotate(-10deg); } 60% { transform: translateY(8px); } }
+
+    /* Estado: Capture / Taunt / Confident (Sonrisa de superioridad) */
+    .boss-stage-wrapper[data-state="Capture"] .mouth-neutral,
+    .boss-stage-wrapper[data-state="Taunt"] .mouth-neutral,
+    .boss-stage-wrapper[data-state="Confident"] .mouth-neutral { opacity: 0; }
+    .boss-stage-wrapper[data-state="Capture"] .mouth-smile,
+    .boss-stage-wrapper[data-state="Taunt"] .mouth-smile,
+    .boss-stage-wrapper[data-state="Confident"] .mouth-smile { opacity: 1; }
+
+    /* Estado: Laugh (Carcajada con mandíbula abierta) */
+    .boss-stage-wrapper[data-state="Laugh"] .mouth-neutral { opacity: 0; }
+    .boss-stage-wrapper[data-state="Laugh"] .mouth-open { opacity: 1; }
+    .boss-stage-wrapper[data-state="Laugh"] .layer-head-pose { animation: bossLaughShake 0.28s infinite alternate; }
+    @keyframes bossLaughShake { from { transform: translateY(0); } to { transform: translateY(-5px); } }
+
+    /* Estado: PieceLost / Blunder / Annoyed (Ceño fruncido y negación con la cabeza) */
+    .boss-stage-wrapper[data-state="PieceLost"] .mouth-neutral { opacity: 0; }
+    .boss-stage-wrapper[data-state="PieceLost"] .mouth-frown { opacity: 1; }
+    .boss-stage-wrapper[data-state="PieceLost"] .layer-head-pose { animation: headShakeNo 0.6s ease-in-out; }
+    @keyframes headShakeNo { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-7px); } 75% { transform: translateX(7px); } }
+
+    /* GLOBO DE DIÁLOGO VINCULADO AL ROSTRO DEL JEFE */
+    #rival-speech-bubble {
+      pointer-events: auto;
+      position: relative;
+      margin-left: 18px;
+      max-width: 340px;
+      background: linear-gradient(135deg, rgba(20, 16, 26, 0.96) 0%, rgba(10, 8, 14, 0.98) 100%);
+      border: 1.5px solid var(--gold);
+      border-radius: 6px;
+      padding: 14px 18px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.85);
+    }
+    /* Punta del globo apuntando directamente a la boca del retrato */
+    #rival-speech-bubble::before {
+      content: '';
+      position: absolute;
+      left: -11px;
+      top: 34px;
+      width: 18px;
+      height: 18px;
+      background: #14101a;
+      border-left: 1.5px solid var(--gold);
+      border-bottom: 1.5px solid var(--gold);
+      transform: rotate(45deg);
+    }
+    .bubble-pop { animation: speechEnter 0.25s cubic-bezier(0.18, 0.89, 0.32, 1.28); }
+    @keyframes speechEnter { from { opacity: 0; transform: translateX(-12px) scale(0.94); } to { opacity: 1; transform: translateX(0) scale(1); } }
+
+    /* PANTALLA DE SELECCIÓN DE JEFES ESTILO RPG (3 ÁREAS) */
+    #realms-screen { background: radial-gradient(circle at 30% 45%, rgba(12,10,18,0.45) 0%, rgba(5,4,8,0.95) 75%); pointer-events: auto; }
+    .rpg-selector-layout { display: grid; grid-template-columns: 1.15fr 1fr; gap: 36px; align-items: center; flex-grow: 1; max-width: 1320px; width: 100%; margin: 0 auto; }
+    #selector-boss-hero-mount { width: 410px; height: 430px; margin: 0 auto; filter: drop-shadow(0 20px 45px rgba(0,0,0,0.95)); }
+    .rpg-lore-panel { display: flex; flex-direction: column; gap: 14px; padding: 28px; }
+    .realms-roster-bar { display: flex; gap: 12px; justify-content: center; padding-top: 12px; overflow-x: auto; }
+    .boss-roster-thumb { background: rgba(16, 13, 22, 0.9); border: 1.5px solid rgba(212,175,55,0.3); border-radius: 6px; width: 92px; padding: 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--text-ivory); transition: all 0.2s; }
+    .boss-roster-thumb.active { border-color: var(--gold-bright); transform: translateY(-6px); box-shadow: 0 8px 20px rgba(212,175,55,0.4); }
+    .boss-roster-thumb.locked { filter: grayscale(0.85) brightness(0.6); }
+    .thumb-portrait { width: 68px; height: 74px; overflow: hidden; border-radius: 4px; }
+    .boss-mini-svg { width: 100%; height: 100%; }
+    .thumb-order { font-size: 0.7rem; color: var(--gold); font-weight: bold; }
+    .thumb-name { font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+    .turn-badge { padding: 8px 16px; font-weight: bold; border-radius: 4px; letter-spacing: 1px; }
+    .player-turn { background: #1b4332; color: #d8f3dc; border: 1px solid #52b788; }
+    .rival-turn { background: #590d22; color: #ffccd5; border: 1px solid #ff4d6d; }
+
+    /* Modal de Ajustes */
+    #settings-modal { background: rgba(0,0,0,0.85); align-items: center; justify-content: center; pointer-events: auto; }
+    .settings-window { width: 680px; max-width: 95vw; max-height: 85vh; display: flex; flex-direction: column; }
+    .settings-tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--border-ornate); margin-bottom: 16px; padding-bottom: 8px; }
+    .settings-tab-btn { background: transparent; border: none; color: #a89f91; font-family: inherit; font-size: 0.95rem; font-weight: bold; padding: 8px 16px; cursor: pointer; }
+    .settings-tab-btn.active { color: var(--gold-bright); border-bottom: 2px solid var(--gold); }
+    .settings-body { overflow-y: auto; flex-grow: 1; padding-right: 8px; }
+    .settings-group { display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px; }
+    .settings-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; }
+    .settings-row label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .settings-row input[type="range"] { accent-color: var(--gold); }
+  </style>
+</head>
+<body>
+  <div id="webgl-viewport"></div>
+
+  <!-- PANTALLA 1: MENÚ PRINCIPAL -->
+  <section id="main-menu" class="game-screen">
+    <div>
+      <h1 class="game-title">THE TEN THRONES</h1>
+      <p class="game-subtitle">DUELOS DE AJEDREZ FANTÁSTICO EN LOS DIEZ REINOS</p>
+      <div class="menu-actions" style="margin: 0 auto;">
+        <button id="btn-continue-match" class="btn-primary">CONTINUAR PARTIDA</button>
+        <button id="btn-open-realms" class="btn-primary">CAMPAÑA: LOS DIEZ REINOS</button>
+        <button id="btn-quick-match" class="btn-primary">PARTIDA RÁPIDA</button>
+        <button id="btn-open-settings" class="btn-primary">AJUSTES</button>
+      </div>
+      <p id="menu-stats-summary" style="margin-top: 28px; font-size: 0.9rem; color: #b8ab96;"></p>
+    </div>
+  </section>
+
+  <!-- PANTALLA 2 REDISEÑADA: SELECTOR DE JEFES DE RPG (3 ÁREAS COORDINADAS) -->
+  <section id="realms-screen" class="game-screen hidden">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2 style="color:var(--gold); letter-spacing:4px;">CRÓNICA DE LOS DIEZ TRONOS</h2>
+      <button id="btn-back-menu" class="btn-primary">VOLVER AL MENÚ</button>
+    </div>
+
+    <div class="rpg-selector-layout">
+      <!-- ÁREA 1: Retrato Principal de Medio Cuerpo del Gobernante -->
+      <div id="selector-boss-hero-mount"></div>
+
+      <!-- ÁREA 2: Información Editorial del Reino y del Rival -->
+      <div class="interactive-panel rpg-lore-panel">
+        <div id="sel-realm-order" style="color:var(--gold); font-size:0.85rem; letter-spacing:2px; font-weight:bold;"></div>
+        <h1 id="sel-realm-title" style="font-size:2.1rem; color:var(--gold-bright);"></h1>
+        <h3 id="sel-rival-name" style="font-size:1.15rem; color:#dfd4c3; font-weight:normal;"></h3>
+        <blockquote id="sel-realm-quote" style="font-style:italic; color:#c9b79c; border-left:3px solid var(--gold); padding-left:14px; margin:6px 0;"></blockquote>
+        <p id="sel-realm-style" style="font-size:0.95rem; line-height:1.5; color:#d8d0c5;"></p>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:8px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.1);">
+          <div><span style="font-size:0.78rem; color:#a89f91;">DIFICULTAD RECOMENDADA</span><br/><b id="sel-realm-diff" style="color:var(--gold);"></b></div>
+          <div><span style="font-size:0.78rem; color:#a89f91;">RÉCORD EN ESTE TRONO</span><br/><b id="sel-realm-record" style="color:var(--gold);"></b></div>
+        </div>
+
+        <p id="sel-lock-requirement" style="font-size:0.82rem; color:#b8ab96; margin-top:4px;"></p>
+        <button id="btn-selector-challenge" class="btn-primary" style="margin-top:8px; width:100%; font-size:1.05rem;">DESAFIAR TRONO</button>
+      </div>
+    </div>
+
+    <!-- ÁREA 3: Galería Horizontal con los 10 Retratos Faciales -->
+    <div id="realms-roster-strip" class="realms-roster-bar" role="navigation" aria-label="Selector de los Diez Gobernantes"></div>
+  </section>
+
+  <!-- PANTALLA 3 REDISEÑADA: HUD CON JEFE DE MEDIO CUERPO Y GLOBO VINCULADO AL ROSTRO -->
+  <section id="hud-screen" class="game-screen hidden">
+    <div class="hud-top-bar" style="display:flex; justify-content:space-between; align-items:flex-start;">
+      <div class="interactive-panel" style="min-width:230px;">
+        <div id="hud-realm-name" style="font-size:0.75rem; color:var(--gold); letter-spacing:1.5px;"></div>
+        <div id="hud-rival-name" style="font-size:1.2rem; font-weight:bold; margin-top:2px;"></div>
+        <div id="hud-rival-title" style="font-size:0.82rem; color:#bfb29e;"></div>
+      </div>
+
+      <!-- Teatro Central del Rival Sentado frente al Tablero + Globo de Diálogo -->
+      <div class="hud-boss-theater">
+        <div id="hud-boss-avatar-mount"></div>
+        <div id="rival-speech-bubble">
+          <span id="rival-sound-cue" style="font-size:0.76rem; color:var(--gold); display:block; margin-bottom:4px;"></span>
+          <span id="rival-dialogue-text" style="font-size:0.96rem; line-height:1.4;"></span>
+        </div>
+      </div>
+
+      <div class="interactive-panel" style="display:flex; flex-direction:column; gap:8px; align-items:flex-end; min-width:230px;">
+        <div id="hud-turn-indicator" class="turn-badge player-turn">TU TURNO</div>
+        <div style="font-size:0.82rem;">Nivel del Gobernante: <b id="hud-difficulty" style="color:var(--gold);"></b></div>
+        <div id="hud-check-alert" class="hidden" style="color:#ff4d6d; font-weight:bold; letter-spacing:1px;">¡JAQUE AL REY!</div>
+      </div>
+    </div>
+
+    <div class="hud-bottom-bar" style="display:flex; justify-content:space-between; align-items:flex-end;">
+      <div class="interactive-panel">
+        <div style="font-size:0.75rem; color:var(--gold); margin-bottom:4px;">REGISTRO REAL DE JUGADAS (PGN)</div>
+        <div id="hud-move-history" style="width:340px; height:76px; overflow-y:auto; font-size:0.85rem;"></div>
+      </div>
+
+      <div class="interactive-panel" style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button id="btn-cam-gameplay" class="btn-primary">VISTA DUELO</button>
+        <button id="btn-cam-cinematic" class="btn-primary">VISTA CORTE</button>
+        <button id="btn-cam-top" class="btn-primary">VISTA TÁCTICA</button>
+        <button id="btn-hud-undo" class="btn-primary">DESHACER</button>
+        <button id="btn-hud-restart" class="btn-primary">REINICIAR</button>
+        <button id="btn-hud-settings" class="btn-primary">AJUSTES</button>
+        <button id="btn-hud-resign" class="btn-primary">ABDICAR</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODAL DE AJUSTES -->
+  <div id="settings-modal" class="game-screen hidden">
+    <div class="interactive-panel settings-window">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h2 style="color:var(--gold); letter-spacing:2px;">AJUSTES DEL JUEGO</h2>
+        <button id="btn-close-settings" class="btn-primary" style="padding:6px 14px;">✕</button>
+      </div>
+      <div class="settings-tabs">
+        <button type="button" class="settings-tab-btn active" data-tab="tab-gfx">Gráficos</button>
+        <button type="button" class="settings-tab-btn" data-tab="tab-aud">Audio</button>
+        <button type="button" class="settings-tab-btn" data-tab="tab-game">Jugabilidad</button>
+        <button type="button" class="settings-tab-btn" data-tab="tab-acc">Accesibilidad</button>
+      </div>
+      <form id="settings-form" class="settings-body">
+        <div id="tab-gfx" class="settings-tab-content">
+          <div class="settings-group">
+            <div class="settings-row">
+              <span>Calidad Gráfica:</span>
+              <select id="set-gfx-quality" class="btn-primary" style="padding:6px 12px;">
+                <option value="low">Baja</option>
+                <option value="medium">Media</option>
+                <option value="high">Alta</option>
+                <option value="ultra">Ultra</option>
+              </select>
+            </div>
+            <div class="settings-row">
+              <label><input type="checkbox" id="set-gfx-adaptive" /> Calidad Adaptativa (Mantener 60 FPS)</label>
+            </div>
+            <div class="settings-row">
+              <label><input type="checkbox" id="set-gfx-shadows" /> Sombras Suaves</label>
+            </div>
+            <div class="settings-row">
+              <label><input type="checkbox" id="set-gfx-particles" /> Partículas Ambientales</label>
+            </div>
+            <div class="settings-row">
+              <label><input type="checkbox" id="set-gfx-cinematic" /> Animaciones Cinemáticas</label>
+            </div>
+            <div class="settings-row">
+              <span>Escala de Render: <b id="lbl-gfx-scale">100%</b></span>
+              <input type="range" id="set-gfx-scale" min="0.5" max="1.0" step="0.05" />
+            </div>
+          </div>
+        </div>
+        <div id="tab-aud" class="settings-tab-content hidden">
+          <div class="settings-group">
+            <div class="settings-row">
+              <span>Volumen Maestro: <b id="lbl-aud-master">85%</b></span>
+              <input type="range" id="set-aud-master" min="0" max="100" />
+            </div>
+            <div class="settings-row">
+              <span>Música: <b id="lbl-aud-music">70%</b></span>
+              <input type="range" id="set-aud-music" min="0" max="100" />
+            </div>
+            <div class="settings-row">
+              <span>Efectos SFX: <b id="lbl-aud-sfx">80%</b></span>
+              <input type="range" id="set-aud-sfx" min="0" max="100" />
+            </div>
+            <div class="settings-row">
+              <label><input type="checkbox" id="set-aud-muted" /> Silenciar Todo</label>
+            </div>
+          </div>
+        </div>
+        <div id="tab-game" class="settings-tab-content hidden">
+          <div class="settings-group">
+            <div class="settings-row">
+              <span>Dificultad por Defecto:</span>
+              <select id="set-game-difficulty" class="btn-primary" style="padding:6px 12px;">
+                <option value="beginner">Principiante</option>
+                <option value="easy">Fácil</option>
+                <option value="intermediate">Intermedio</option>
+                <option value="advanced">Avanzado</option>
+                <option value="expert">Experto</option>
+                <option value="master">Maestro</option>
+              </select>
+            </div>
+            <div class="settings-row">
+              <label><input type="checkbox" id="set-game-legal" /> Mostrar Movimientos Legales</label>
+            </div>
+            <div class="settings-row">
+              <span>Velocidad de Animación: <b id="lbl-game-speed">1.0x</b></span>
+              <input type="range" id="set-game-speed" min="0.5" max="2.0" step="0.1" />
+            </div>
+            <div class="settings-row">
+              <span>Orientación del Tablero:</span>
+              <select id="set-game-orientation" class="btn-primary" style="padding:6px 12px;">
+                <option value="w">Blancas (Abajo)</option>
+                <option value="b">Negras (Abajo)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div id="tab-acc" class="settings-tab-content hidden">
+          <div class="settings-group">
+            <div class="settings-row">
+              <span>Escala de Interfaz: <b id="lbl-acc-scale">100%</b></span>
+              <input type="range" id="set-acc-scale" min="0.8" max="1.4" step="0.05" />
+            </div>
+            <div class="settings-row">
+              <label><input type="checkbox" id="set-acc-contrast" /> Modo Alto Contraste</label>
+            </div>
+            <div class="settings-row">
+              <label><input type="checkbox" id="set-acc-motion" /> Reducir Movimiento</label>
+            </div>
+            <div class="settings-row">
+              <label><input type="checkbox" id="set-acc-notaunts" /> Desactivar Burlas del Rival</label>
+            </div>
+            <div class="settings-row">
+              <label><input type="checkbox" id="set-acc-subtitles" /> Mostrar Subtítulos de Voz</label>
+            </div>
+          </div>
+        </div>
+      </form>
+      <div style="display:flex; justify-content:space-between; margin-top:16px; pt:12px; border-top:1px solid var(--border-ornate);">
+        <button type="button" id="btn-toggle-fullscreen" class="btn-primary" style="font-size:0.8rem;">Pantalla Completa</button>
+        <button type="button" id="btn-reset-progress" class="btn-primary" style="font-size:0.8rem; background:#5a1015; border-color:#d90429;">Borrar Progreso</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE PROMOCIÓN DE PEÓN -->
+  <div id="promotion-modal" class="game-screen hidden" style="align-items:center; justify-content:center; background:rgba(0,0,0,0.75); pointer-events:auto;">
+    <div class="interactive-panel" style="text-align:center;">
+      <h3 style="color:var(--gold); margin-bottom:14px;">CORONACIÓN DEL PEÓN</h3>
+      <div style="display:flex; gap:12px;">
+        <button class="btn-primary" data-piece="q">DAMA</button>
+        <button class="btn-primary" data-piece="r">TORRE</button>
+        <button class="btn-primary" data-piece="b">ALFIL</button>
+        <button class="btn-primary" data-piece="n">CABALLO</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE FINAL DE PARTIDA -->
+  <div id="match-end-modal" class="game-screen hidden" style="align-items:center; justify-content:center; background:rgba(0,0,0,0.82); pointer-events:auto;">
+    <div class="interactive-panel" style="text-align:center; max-width:440px;">
+      <h2 id="match-end-title" style="color:var(--gold); font-size:2.2rem; margin-bottom:10px;"></h2>
+      <p id="match-end-subtitle" style="margin-bottom:20px;"></p>
+      <button id="btn-match-end-menu" class="btn-primary">VOLVER A LOS REINOS</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
