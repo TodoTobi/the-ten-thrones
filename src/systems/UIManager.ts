@@ -69,9 +69,7 @@ export class UIManager {
       const thumb = document.createElement('button');
       thumb.type = 'button';
       thumb.className = `boss-roster-thumb ${isUnlocked ? 'unlocked' : 'locked'} ${isSelected ? 'active' : ''}`;
-      const portraitUrl = realm.id === 'eternal_crown'
-        ? '/assets/characters/king/expressions/smile.png'
-        : AnimeBossThroneActor.renderPortraitDataURL(realm);
+      const portraitUrl = `/assets/characters/${realm.id}/sprites/idle.png`;
       thumb.innerHTML = `
         <div class="thumb-portrait"><img src="${portraitUrl}" alt="${realm.rivalName}" style="width:100%;height:100%;object-fit:cover;"/></div>
         <span class="thumb-order">I${realm.order}</span>

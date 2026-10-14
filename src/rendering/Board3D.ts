@@ -197,25 +197,22 @@ export class Board3D {
 
 
 
-    const borderMat = new THREE.MeshStandardMaterial({
-
-      color: borderColor,
-
-      roughness: roughness + 0.1,
-
-      metalness,
-
-    });
-
-    const borderGeo = new THREE.BoxGeometry(9.2, 0.45, 9.2);
-
-    const borderMesh = new THREE.Mesh(borderGeo, borderMat);
-
-    borderMesh.position.y = -0.24;
-
-    borderMesh.receiveShadow = true;
-
-    this.boardGroup.add(borderMesh);
+    const customBoard = AssetLoader.getInstance().getClonedBoardSync(realm.id);
+    if (customBoard) {
+      customBoard.position.set(0, 0, 0);
+      this.boardGroup.add(customBoard);
+    } else {
+      const borderMat = new THREE.MeshStandardMaterial({
+        color: borderColor,
+        roughness: roughness + 0.1,
+        metalness,
+      });
+      const borderGeo = new THREE.BoxGeometry(9.2, 0.45, 9.2);
+      const borderMesh = new THREE.Mesh(borderGeo, borderMat);
+      borderMesh.position.y = -0.24;
+      borderMesh.receiveShadow = true;
+      this.boardGroup.add(borderMesh);
+    }
 
 
 

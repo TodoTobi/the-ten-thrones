@@ -147,7 +147,8 @@ class TenThronesGame {
       this.startMatch(realm, difficulty, customFen);
     };
 
-    this.uiManager.onRealmPreviewSelected = (realm) => {
+    this.uiManager.onRealmPreviewSelected = async (realm) => {
+      await AssetLoader.getInstance().preloadRealmAssets(realm.id);
       this.sceneManager.loadRealmEnvironment(realm, this.profile.settings.graphics.particles);
       this.sceneManager.configureBloomForRealm(realm, this.postProcessing);
       this.bossThroneActor.loadBossForRealm(realm);

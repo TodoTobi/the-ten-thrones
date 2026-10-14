@@ -155,25 +155,39 @@ export class AssetLoader {
 
 
     // Precargar trono del reino
-
     const throneUrl = `/assets/models/thrones/${realmId}.glb`;
-
     tasks.push(
-
       this.loadModel(throneUrl, {
-
         targetHeight: 6.5,
-
         alignBottomToZero: true,
-
       })
-
     );
 
+    // Precargar tablero personalizado del reino
+    const boardUrl = `/assets/models/boards/${realmId}.glb`;
+    tasks.push(
+      this.loadModel(boardUrl, {
+        alignBottomToZero: false,
+      })
+    );
 
+    // Precargar props arquitectónicos del entorno
+    const envProps = [
+      'brazier_torch',
+      'gothic_pillar',
+      'stone_barrier',
+      'royal_banner',
+      'stained_glass_window',
+    ];
+    for (const prop of envProps) {
+      tasks.push(
+        this.loadModel(`/assets/models/environment/${prop}.glb`, {
+          alignBottomToZero: true,
+        })
+      );
+    }
 
     await Promise.allSettled(tasks);
-
   }
 
 
@@ -311,7 +325,45 @@ export class AssetLoader {
     });
 
     return clone;
+  }
 
+  /**
+   * Devuelve de forma síncrona el tablero GLB del reino si fue precargado,
+   * o `null` para usar el tablero procedural.
+   */
+  public getClonedBoardSync(realmId: string): THREE.Group | null {
+    const boardUrl = `/assets/models/boards/${realmId}.glb`;
+    const template = this.modelCache.get(boardUrl);
+    if (!template) return null;
+
+    const clone = template.clone(true);
+    clone.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (mesh.isMesh) {
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+    return clone;
+  }
+
+  /**
+   * Devuelve de forma síncrona un prop arquitectónico del entorno si fue precargado.
+   */
+  public getClonedEnvSync(modelName: string): THREE.Group | null {
+    const envUrl = `/assets/models/environment/${modelName}.glb`;
+    const template = this.modelCache.get(envUrl);
+    if (!template) return null;
+
+    const clone = template.clone(true);
+    clone.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (mesh.isMesh) {
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+    return clone;
   }
 
 

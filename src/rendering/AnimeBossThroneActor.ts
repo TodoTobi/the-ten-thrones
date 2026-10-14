@@ -92,9 +92,10 @@ export class AnimeBossThroneActor {
   private currentPose: PaperPoseName = 'idle';
   private targetPose: PaperPoseName = 'idle';
 
-  // Soporte Paper Mario
-  private isPaperMode = false;
+  // Soporte Paper Mario para los 10 Reinos
+  private isPaperMode = true;
   private paperTextureLoader = new THREE.TextureLoader();
+  private paperTexturesCache = new Map<string, Map<PaperPoseName, THREE.Texture>>();
   private paperTextures = new Map<PaperPoseName, THREE.Texture>();
   private paperMaterial!: THREE.MeshBasicMaterial;
 
@@ -148,7 +149,7 @@ export class AnimeBossThroneActor {
     // 2. Geometría del plano 2.5D sentado en el trono 3D (z = -7.65)
     // Proporciones 800:620 optimizadas para los sprites de Paper Mario
     const geo = new THREE.PlaneGeometry(5.8, 4.5);
-    this.planeMesh = new THREE.Mesh(geo, this.canvasMaterial);
+    this.planeMesh = new THREE.Mesh(geo, this.paperMaterial);
     this.planeMesh.position.set(0, this.baseY, -7.65);
     this.group.add(this.planeMesh);
 
@@ -178,10 +179,24 @@ export class AnimeBossThroneActor {
     this.group.add(this.commandSigilRing);
 
     scene.add(this.group);
-    this.preloadKingPaperSprites();
+    this.preloadAllRealmsPaperSprites();
   }
 
-  private preloadKingPaperSprites(): void {
+  private loadPaperSpritesForRealm(realmId: string): void {
+    if (this.paperTexturesCache.has(realmId)) {
+      this.paperTextures = this.paperTexturesCache.get(realmId)!;
+      const currentTex = this.paperTextures.get(this.currentPose);
+      if (currentTex) {
+        this.paperMaterial.map = currentTex;
+        this.paperMaterial.needsUpdate = true;
+      }
+      return;
+    }
+
+    const realmTextures = new Map<PaperPoseName, THREE.Texture>();
+    this.paperTexturesCache.set(realmId, realmTextures);
+    this.paperTextures = realmTextures;
+
     const poses: PaperPoseName[] = [
       'idle', 'thinking', 'calculating',
       'taunt', 'surprised', 'irritated',
@@ -190,20 +205,38 @@ export class AnimeBossThroneActor {
 
     poses.forEach((p) => {
       this.paperTextureLoader.load(
-        `/assets/characters/king/sprites/${p}.png`,
+        `/assets/characters/${realmId}/sprites/${p}.png`,
         (tex) => {
           tex.colorSpace = THREE.SRGBColorSpace;
           tex.minFilter = THREE.LinearFilter;
           tex.magFilter = THREE.LinearFilter;
-          this.paperTextures.set(p, tex);
+          realmTextures.set(p, tex);
 
-          // Si el rey ya está activo y es la pose inicial, aplicarla
-          if (this.isPaperMode && this.currentPose === p) {
-            this.paperMaterial.map = tex;
-            this.paperMaterial.needsUpdate = true;
+          // Si el reino activo en este momento es este y coincide la pose o aún no hay textura asignada
+          if (this.currentRealm?.id === realmId && this.isPaperMode) {
+            if (this.currentPose === p || !this.paperMaterial.map) {
+              this.paperMaterial.map = tex;
+              this.paperMaterial.needsUpdate = true;
+            }
           }
+        },
+        undefined,
+        (err) => {
+          console.warn(`[PaperMario] No se pudo cargar sprite ${p} para ${realmId}`, err);
         }
       );
+    });
+  }
+
+  private preloadAllRealmsPaperSprites(): void {
+    const realmIds = [
+      'eternal_crown', 'elven_throne', 'iron_bastion', 'ash_throne',
+      'draconic_empire', 'shadow_court', 'celestial_sanctuary',
+      'snow_dominion', 'sand_kingdom', 'void_throne'
+    ];
+
+    realmIds.forEach((id) => {
+      this.loadPaperSpritesForRealm(id);
     });
   }
 
@@ -213,18 +246,11 @@ export class AnimeBossThroneActor {
     const sigilMat = this.commandSigilRing.material as THREE.MeshBasicMaterial;
     sigilMat.color.setHex(realm.palette.accent);
 
-    if (realm.id === 'eternal_crown') {
-      // Activar modo Paper Mario con los sprites 2K recortados
-      this.isPaperMode = true;
-      this.planeMesh.material = this.paperMaterial;
-      this.shadowMesh.visible = true;
-      this.applyPaperPose(this.mapStateToPose(this.currentState), false);
-    } else {
-      // Reinos sin sprites dedicados usan el motor procedural canvas
-      this.isPaperMode = false;
-      this.planeMesh.material = this.canvasMaterial;
-      this.shadowMesh.visible = false;
-    }
+    this.isPaperMode = true;
+    this.planeMesh.material = this.paperMaterial;
+    this.shadowMesh.visible = true;
+    this.loadPaperSpritesForRealm(realm.id);
+    this.applyPaperPose(this.mapStateToPose(this.currentState), true);
   }
 
   /**
@@ -426,20 +452,10 @@ export class AnimeBossThroneActor {
 
   /**
    * Genera la miniatura o retrato para el Selector de Reinos:
-   * Para el Rey (eternal_crown) entrega directamente su arte Paper Mario.
+   * Retorna directamente el arte en alta resolución del gobernante correspondiente.
    */
   public static renderPortraitDataURL(realm: RealmConfig): string {
-    if (realm.id === 'eternal_crown') {
-      return '/assets/characters/king/hero_full.png';
-    }
-
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = 512;
-    tempCanvas.height = 512;
-    const ctx = tempCanvas.getContext('2d')!;
-    ctx.scale(0.5, 0.5);
-    AnimeBossThroneActor.drawAnimeCharacter(ctx, realm, 'Confident', 0, 0, { x: 0, y: 0 }, 0);
-    return tempCanvas.toDataURL();
+    return `/assets/bosses/${realm.id}.png`;
   }
 
   public static drawAnimeCharacter(

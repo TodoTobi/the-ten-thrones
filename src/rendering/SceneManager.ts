@@ -276,9 +276,54 @@ export class SceneManager {
 
     // Realm-Specific Signature Landmarks
     switch (realm.id) {
-      case 'eternal_crown':
+      case 'eternal_crown': {
+        // Monumental Gothic Stained Glass Window behind the Throne
+        const customWindow = AssetLoader.getInstance().getClonedEnvSync('stained_glass_window');
+        if (customWindow) {
+          customWindow.position.set(0, 1.0, -12.5);
+          customWindow.scale.set(1.2, 1.2, 1.2);
+          PostProcessingPipeline.markForSelectiveBloom(customWindow);
+          this.environmentGroup.add(customWindow);
+        } else {
+          const roseFrame = new THREE.Mesh(new THREE.RingGeometry(2.6, 3.4, 24), accentMat);
+          roseFrame.position.set(0, 6.8, -12.5);
+          PostProcessingPipeline.markForSelectiveBloom(roseFrame);
+          this.environmentGroup.add(roseFrame);
+        }
+
+        // Royal Banners flanking the Throne Room
+        for (const side of [-5.2, 5.2]) {
+          const banner = AssetLoader.getInstance().getClonedEnvSync('royal_banner');
+          if (banner) {
+            banner.position.set(side, 3.2, -8.2);
+            banner.scale.set(1.1, 1.1, 1.1);
+            if (side > 0) banner.rotation.y = Math.PI;
+            this.environmentGroup.add(banner);
+          }
+        }
+
+        // Braziers flanking the Throne
+        for (const side of [-4.5, 4.5]) {
+          const brazier = AssetLoader.getInstance().getClonedEnvSync('brazier_torch');
+          if (brazier) {
+            brazier.position.set(side, -0.5, -6.5);
+            brazier.scale.set(0.9, 0.9, 0.9);
+            this.environmentGroup.add(brazier);
+          }
+        }
+
+        // Stone Balustrades framing the foreground/midground arena
+        for (const side of [-7.6, 7.6]) {
+          const barrier = AssetLoader.getInstance().getClonedEnvSync('stone_barrier');
+          if (barrier) {
+            barrier.position.set(side, -0.5, -1.0);
+            barrier.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+            this.environmentGroup.add(barrier);
+          }
+        }
+        break;
+      }
       case 'shadow_court': {
-        // Stained-Glass Rose Window behind the Throne
         const roseFrame = new THREE.Mesh(new THREE.RingGeometry(2.6, 3.4, 24), accentMat);
         roseFrame.position.set(0, 6.8, -12.5);
         PostProcessingPipeline.markForSelectiveBloom(roseFrame);
