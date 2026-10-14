@@ -75,31 +75,169 @@
     .boss-stage-wrapper[data-state="PieceLost"] .layer-head-pose { animation: headShakeNo 0.6s ease-in-out; }
     @keyframes headShakeNo { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-7px); } 75% { transform: translateX(7px); } }
 
-    /* GLOBO DE DIÁLOGO VINCULADO AL ROSTRO DEL JEFE */
-    #rival-speech-bubble {
+    /* GLOBO DE DIÁLOGO DINÁMICO ESTILO MANGA (ANCLADO AL ROSTRO DEL GOBERNANTE) */
+    .manga-speech-bubble {
+      position: fixed;
+      z-index: 55;
       pointer-events: auto;
+      max-width: 350px;
+      min-width: 220px;
+      padding: 13px 18px;
+      color: var(--text-ivory);
+      filter: drop-shadow(0 16px 36px rgba(0, 0, 0, 0.95));
+      transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+      cursor: pointer;
+      box-sizing: border-box;
+    }
+
+    /* Variante Normal: Elegancia oscura con reborde dorado y marco interior */
+    .manga-speech-bubble.manga-bubble-normal {
+      background: linear-gradient(145deg, rgba(16, 12, 22, 0.96) 0%, rgba(8, 6, 13, 0.98) 100%);
+      border: 2px solid var(--gold);
+      border-radius: 12px;
+      outline: 1px solid rgba(212, 175, 55, 0.28);
+      outline-offset: -5px;
+    }
+    .manga-speech-bubble.manga-bubble-normal .manga-tail-svg path {
+      fill: rgba(16, 12, 22, 0.96);
+      stroke: var(--gold);
+      stroke-width: 2;
+    }
+
+    /* Variante Rabia / Jaque / Ataque: Borde carmesí incandescente */
+    .manga-speech-bubble.manga-bubble-rage {
+      background: linear-gradient(145deg, rgba(38, 8, 18, 0.97) 0%, rgba(18, 4, 10, 0.98) 100%);
+      border: 2.2px solid #ff4d6d;
+      border-radius: 8px;
+      outline: 1px solid rgba(255, 77, 109, 0.38);
+      outline-offset: -5px;
+      animation: mangaRagePulse 1.6s infinite alternate ease-in-out;
+    }
+    .manga-speech-bubble.manga-bubble-rage .manga-tail-svg path {
+      fill: rgba(38, 8, 18, 0.97);
+      stroke: #ff4d6d;
+      stroke-width: 2.2;
+    }
+    @keyframes mangaRagePulse {
+      0% { box-shadow: 0 0 16px rgba(255, 77, 109, 0.35); }
+      100% { box-shadow: 0 0 32px rgba(255, 77, 109, 0.8); }
+    }
+
+    /* Variante Pensamiento / Cálculo: Suave etéreo con destello cian/zafiro */
+    .manga-speech-bubble.manga-bubble-thought {
+      background: linear-gradient(145deg, rgba(12, 18, 34, 0.96) 0%, rgba(6, 10, 22, 0.98) 100%);
+      border: 2px solid #60a5fa;
+      border-radius: 20px 20px 20px 4px;
+      outline: 1px solid rgba(96, 165, 250, 0.3);
+      outline-offset: -5px;
+    }
+    .manga-speech-bubble.manga-bubble-thought .manga-tail-svg path {
+      fill: rgba(12, 18, 34, 0.96);
+      stroke: #60a5fa;
+      stroke-width: 2;
+    }
+
+    /* Encabezado del Globo Manga: Onomatopeya / Estado / Botón cerrar */
+    .manga-bubble-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .manga-tag-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .manga-tag-rune {
+      color: var(--gold-bright);
+      font-size: 0.75rem;
+    }
+    .manga-sound-cue {
+      font-size: 0.74rem;
+      letter-spacing: 1.4px;
+      font-weight: 700;
+      color: var(--gold-bright);
+      text-transform: uppercase;
+      font-family: inherit;
+    }
+    .manga-bubble-close {
+      background: transparent;
+      border: none;
+      color: #9c9082;
+      font-size: 0.85rem;
+      cursor: pointer;
+      padding: 0 4px;
+      transition: color 0.15s ease;
+      line-height: 1;
+    }
+    .manga-bubble-close:hover {
+      color: #ff6b81;
+    }
+
+    /* Cuerpo del Diálogo */
+    .manga-bubble-body {
       position: relative;
-      background: linear-gradient(135deg, rgba(20, 16, 26, 0.96) 0%, rgba(10, 8, 14, 0.98) 100%);
-      border: 1.5px solid var(--gold);
-      border-radius: 6px;
-      padding: 12px 16px;
-      box-shadow: 0 12px 30px rgba(0,0,0,0.85);
     }
-    /* Punta del globo apuntando hacia el jefe en el centro */
-    #rival-speech-bubble::before {
-      content: '';
+    .manga-dialogue-text {
+      font-size: 1.02rem;
+      line-height: 1.44;
+      font-style: italic;
+      color: #f7f3eb;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+    }
+
+    /* Cola Curva de Cómic Manga apuntando al Rostro del Jefe */
+    .manga-tail-container {
       position: absolute;
-      right: -8px;
-      top: 24px;
-      width: 14px;
-      height: 14px;
-      background: #14101a;
-      border-right: 1.5px solid var(--gold);
-      border-top: 1.5px solid var(--gold);
-      transform: rotate(45deg);
+      width: 32px;
+      height: 36px;
+      pointer-events: none;
     }
-    .bubble-pop { animation: speechEnter 0.25s cubic-bezier(0.18, 0.89, 0.32, 1.28); }
-    @keyframes speechEnter { from { opacity: 0; transform: translateX(-12px) scale(0.94); } to { opacity: 1; transform: translateX(0) scale(1); } }
+    .manga-tail-container.tail-left {
+      left: -22px;
+      bottom: 12px;
+    }
+    .manga-tail-container.tail-right {
+      right: -22px;
+      bottom: 12px;
+      transform: scaleX(-1);
+    }
+    .manga-tail-svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    /* Animaciones Manga de Entrada y Salida */
+    .manga-pop-in {
+      animation: mangaPopIn 0.24s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+    }
+    .manga-pop-out {
+      animation: mangaPopOut 0.18s ease-in forwards;
+    }
+    @keyframes mangaPopIn {
+      from {
+        opacity: 0;
+        transform: scale(0.35) translateY(18px);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+    @keyframes mangaPopOut {
+      from {
+        opacity: 1;
+        transform: scale(1);
+      }
+      to {
+        opacity: 0;
+        transform: scale(0.4) translateY(-14px);
+      }
+    }
 
     /* PANTALLA DE SELECCIÓN DE JEFES ESTILO RPG (3 ÁREAS) */
     #realms-screen { background: radial-gradient(circle at 30% 45%, rgba(12,10,18,0.72) 0%, rgba(5,4,8,0.96) 75%); pointer-events: auto; }
@@ -192,18 +330,29 @@
         <div id="hud-rival-title" style="font-size:0.82rem; color:#bfb29e;"></div>
       </div>
 
-      <!-- Teatro Central del Rival Sentado frente al Tablero + Globo de Diálogo -->
-      <div class="hud-boss-theater">
-        <div id="rival-speech-bubble">
-          <span id="rival-sound-cue" style="font-size:0.76rem; color:var(--gold); display:block; margin-bottom:4px;"></span>
-          <span id="rival-dialogue-text" style="font-size:0.96rem; line-height:1.4;"></span>
-        </div>
-      </div>
-
       <div class="interactive-panel" style="display:flex; flex-direction:column; gap:8px; align-items:flex-end; min-width:230px;">
         <div id="hud-turn-indicator" class="turn-badge player-turn">TU TURNO</div>
         <div style="font-size:0.82rem;">Nivel del Gobernante: <b id="hud-difficulty" style="color:var(--gold);"></b></div>
         <div id="hud-check-alert" class="hidden" style="color:#ff4d6d; font-weight:bold; letter-spacing:1px;">¡JAQUE AL REY!</div>
+      </div>
+    </div>
+
+    <!-- GLOBO DE DIÁLOGO DINÁMICO ESTILO MANGA (ANCLADO AL ROSTRO DEL GOBERNANTE) -->
+    <div id="rival-speech-bubble" class="manga-speech-bubble manga-bubble-normal hidden" role="region" aria-live="polite">
+      <div class="manga-bubble-header">
+        <div class="manga-tag-wrap">
+          <span class="manga-tag-rune">✦</span>
+          <span id="rival-sound-cue" class="manga-sound-cue">ORDEN IMPERIAL</span>
+        </div>
+        <button type="button" id="btn-close-speech-bubble" class="manga-bubble-close" aria-label="Cerrar diálogo">✕</button>
+      </div>
+      <div class="manga-bubble-body">
+        <p id="rival-dialogue-text" class="manga-dialogue-text"></p>
+      </div>
+      <div class="manga-tail-container tail-left">
+        <svg class="manga-tail-svg" viewBox="0 0 32 36" preserveAspectRatio="none">
+          <path d="M32,2 C20,14 10,24 0,36 C18,30 26,20 32,10 Z" />
+        </svg>
       </div>
     </div>
 

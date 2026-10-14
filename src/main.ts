@@ -357,7 +357,7 @@ class TenThronesGame {
       showSubtitles: this.profile.settings.accessibility.showSubtitles,
     });
     if (line) {
-      this.uiManager.showSpeechBubble(line.text, line.soundCue);
+      this.uiManager.showSpeechBubble(line.text, line.soundCue, targetState);
       this.bossThroneActor.triggerSpeechVocalization(Math.min(3200, Math.max(1200, line.text.length * 38)));
     }
   }
@@ -425,6 +425,16 @@ class TenThronesGame {
     this.sceneManager.update(delta, elapsed);
     this.bossThroneActor.update(delta, elapsed);
     this.board3D.update();
+
+    if (this.uiManager.isSpeechBubbleActive()) {
+      const headAnchor = this.bossThroneActor.getSpeechAnchorWorldPosition();
+      const proj = headAnchor.clone().project(this.camera);
+      const isVisible = proj.z > -1.0 && proj.z < 1.0;
+      const screenX = (proj.x * 0.5 + 0.5) * window.innerWidth;
+      const screenY = (-(proj.y * 0.5) + 0.5) * window.innerHeight;
+      this.uiManager.updateSpeechBubblePosition(screenX, screenY, isVisible);
+    }
+
     this.postProcessing.render();
   };
 }

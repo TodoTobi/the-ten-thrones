@@ -20,11 +20,27 @@ export class UIManager {
   public onBossArmrestImpact?: () => void;
   public onScreenChange?: (screenId: string) => void;
 
+  private speechTimeoutId: number | null = null;
+  private isBubbleActive = false;
+  private currentTailSide: 'left' | 'right' = 'left';
+
   public init(profile: SaveProfileData): void {
     this.profile = profile;
     this.hudBossAvatar = new RivalAvatar2D('#hud-boss-avatar-mount');
     this.hudBossAvatar.onArmrestImpact = () => this.onBossArmrestImpact?.();
     this.selectorBossAvatar = new RivalAvatar2D('#selector-boss-hero-mount');
+
+    const closeBtn = document.getElementById('btn-close-speech-bubble');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.hideSpeechBubble();
+      });
+    }
+    const bubble = document.getElementById('rival-speech-bubble');
+    if (bubble) {
+      bubble.addEventListener('click', () => this.hideSpeechBubble());
+    }
 
     this.bindMenuButtons();
     this.renderRealmsSelectorRPG();
@@ -40,6 +56,9 @@ export class UIManager {
   }
 
   public showScreen(screenId: 'main-menu' | 'realms-screen' | 'hud-screen' | 'settings-modal'): void {
+    if (screenId !== 'hud-screen') {
+      this.hideSpeechBubble();
+    }
     document.querySelectorAll('.game-screen').forEach((el) => el.classList.add('hidden'));
     document.getElementById(screenId)?.classList.remove('hidden');
     this.onScreenChange?.(screenId);
@@ -145,15 +164,124 @@ export class UIManager {
     this.hudBossAvatar.lookAtBoardSquare(square);
   }
 
-  public showSpeechBubble(text: string, soundCue: string): void {
+  public showSpeechBubble(text: string, soundCue: string, state: CharacterAnimationState = 'Idle'): void {
     const bubble = document.getElementById('rival-speech-bubble');
     if (!bubble) return;
-    this.setText('rival-sound-cue', soundCue);
-    this.setText('rival-dialogue-text', `«${text}»`);
-    bubble.classList.remove('hidden', 'bubble-pop');
-    void bubble.offsetWidth; // Reiniciar animación de entrada
-    bubble.classList.add('bubble-pop');
+
+    if (this.speechTimeoutId !== null) {
+      window.clearTimeout(this.speechTimeoutId);
+      this.speechTimeoutId = null;
+    }
+
+    const soundCueEl = document.getElementById('rival-sound-cue');
+    if (soundCueEl) {
+      soundCueEl.textContent = soundCue ? soundCue.toUpperCase() : 'ORDEN IMPERIAL';
+    }
+
+    const textEl = document.getElementById('rival-dialogue-text');
+    if (textEl) {
+      textEl.textContent = `«${text}»`;
+    }
+
+    // Adaptar clase de diseño manga según estado emocional
+    bubble.classList.remove('manga-bubble-rage', 'manga-bubble-thought', 'manga-bubble-normal');
+    if (['Check', 'PieceLost'].includes(state)) {
+      bubble.classList.add('manga-bubble-rage');
+    } else if (['Thinking', 'DeepThinking'].includes(state)) {
+      bubble.classList.add('manga-bubble-thought');
+    } else {
+      bubble.classList.add('manga-bubble-normal');
+    }
+
+    bubble.classList.remove('hidden', 'manga-pop-out', 'manga-pop-in');
+    void bubble.offsetWidth; // Forzar reflow para reiniciar animación pop-in
+    bubble.classList.add('manga-pop-in');
+
+    this.isBubbleActive = true;
+
+    // Desvanecimiento automático proporcional a la lectura
+    const readDuration = Math.min(6800, Math.max(3800, text.length * 62));
+    this.speechTimeoutId = window.setTimeout(() => {
+      this.hideSpeechBubble();
+    }, readDuration);
+
     this.hudBossAvatar.triggerSpeechVocalization(Math.min(3200, Math.max(1200, text.length * 38)));
+  }
+
+  public hideSpeechBubble(): void {
+    const bubble = document.getElementById('rival-speech-bubble');
+    if (!bubble || !this.isBubbleActive) return;
+
+    if (this.speechTimeoutId !== null) {
+      window.clearTimeout(this.speechTimeoutId);
+      this.speechTimeoutId = null;
+    }
+
+    bubble.classList.remove('manga-pop-in');
+    bubble.classList.add('manga-pop-out');
+
+    setTimeout(() => {
+      bubble.classList.add('hidden');
+      bubble.classList.remove('manga-pop-out');
+      this.isBubbleActive = false;
+    }, 180);
+  }
+
+  public isSpeechBubbleActive(): boolean {
+    return this.isBubbleActive;
+  }
+
+  public updateSpeechBubblePosition(headX: number, headY: number, isVisible: boolean): void {
+    const bubble = document.getElementById('rival-speech-bubble');
+    if (!bubble || !this.isBubbleActive) return;
+
+    const tailEl = bubble.querySelector('.manga-tail-container') as HTMLElement | null;
+    const bubbleWidth = bubble.offsetWidth || 300;
+    const bubbleHeight = bubble.offsetHeight || 100;
+    const screenW = window.innerWidth;
+    const screenH = window.innerHeight;
+
+    if (!isVisible || headY < -60 || headY > screenH + 60) {
+      // Posición de respaldo en vista cenital/táctica
+      bubble.style.left = `${Math.round((screenW - bubbleWidth) / 2)}px`;
+      bubble.style.top = '72px';
+      if (tailEl) tailEl.style.display = 'none';
+      return;
+    }
+
+    if (tailEl) tailEl.style.display = 'block';
+
+    // Determinar lado óptimo (derecha o izquierda del rostro)
+    let targetLeft: number;
+    let tailSide: 'left' | 'right';
+
+    if (headX + 40 + bubbleWidth < screenW - 20) {
+      targetLeft = headX + 35;
+      tailSide = 'left';
+    } else {
+      targetLeft = headX - bubbleWidth - 35;
+      tailSide = 'right';
+    }
+
+    // Posicionamiento vertical: ligeramente por encima del nivel de los ojos/boca
+    let targetTop = headY - 80;
+
+    // Clamping para no salirse de pantalla
+    targetTop = Math.max(16, Math.min(screenH - bubbleHeight - 110, targetTop));
+    targetLeft = Math.max(16, Math.min(screenW - bubbleWidth - 16, targetLeft));
+
+    bubble.style.left = `${Math.round(targetLeft)}px`;
+    bubble.style.top = `${Math.round(targetTop)}px`;
+
+    if (tailSide !== this.currentTailSide) {
+      this.currentTailSide = tailSide;
+      bubble.classList.toggle('tail-left', tailSide === 'left');
+      bubble.classList.toggle('tail-right', tailSide === 'right');
+      if (tailEl) {
+        tailEl.classList.toggle('tail-left', tailSide === 'left');
+        tailEl.classList.toggle('tail-right', tailSide === 'right');
+      }
+    }
   }
 
   public promptPawnPromotion(): Promise<PieceSymbol> {

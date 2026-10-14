@@ -354,6 +354,14 @@ export class AnimeBossThroneActor {
     this.gazeOffset.y = THREE.MathUtils.clamp(normY, -1, 1);
   }
 
+  public getSpeechAnchorWorldPosition(): THREE.Vector3 {
+    const worldPos = new THREE.Vector3();
+    this.planeMesh.getWorldPosition(worldPos);
+    // La boca y rostro del personaje se sitúan ~0.95 unidades sobre el centro del plano
+    worldPos.y += 0.95;
+    return worldPos;
+  }
+
   public update(deltaSec: number, elapsedSec: number): void {
     if (!this.currentRealm) return;
 
