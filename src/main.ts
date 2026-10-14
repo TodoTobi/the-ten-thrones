@@ -126,6 +126,13 @@ class TenThronesGame {
       this.audioManager.playSfx('capture');
     };
 
+    this.bossThroneActor.onArmrestImpact = () => {
+      if (!this.profile.settings.accessibility.reducedMotion) {
+        this.board3D.triggerImpactShake(0.18, 300);
+      }
+      this.audioManager.playSfx('capture');
+    };
+
     this.board3D.onSquareSelected = (sq) => {
       if (this.isBusy || this.rules.getTurn() !== 'w' || this.rules.isGameOver()) return [];
       return this.rules.getLegalMoves(sq).map((m) => m.to);
@@ -344,6 +351,7 @@ class TenThronesGame {
     });
     if (line) {
       this.uiManager.showSpeechBubble(line.text, line.soundCue);
+      this.bossThroneActor.triggerSpeechVocalization(Math.min(3200, Math.max(1200, line.text.length * 38)));
     }
   }
 

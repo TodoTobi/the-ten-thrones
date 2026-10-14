@@ -70,49 +70,101 @@ export const ANIME_BOSS_STYLES: Record<string, AnimeBossStyle> = {
   },
 };
 
+export type PaperPoseName =
+  | 'idle'
+  | 'thinking'
+  | 'calculating'
+  | 'taunt'
+  | 'surprised'
+  | 'irritated'
+  | 'fury_slam'
+  | 'focus_lean'
+  | 'defeat';
+
 export class AnimeBossThroneActor {
   private group = new THREE.Group();
-  private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
-  private texture: THREE.CanvasTexture;
   private planeMesh: THREE.Mesh;
+  private shadowMesh: THREE.Mesh;
   private commandSigilRing: THREE.Mesh;
 
   private currentRealm!: RealmConfig;
   private currentState: CharacterAnimationState = 'Idle';
-  private externalSprite: HTMLImageElement | null = null;
+  private currentPose: PaperPoseName = 'idle';
+  private targetPose: PaperPoseName = 'idle';
 
-  // Parámetros de animación en vivo
-  private blinkValue = 0;
-  private commandArmRaise = 0; // 0 = apoyado en trono, 1 = dando orden a la mano de títere
+  // Soporte Paper Mario
+  private isPaperMode = false;
+  private paperTextureLoader = new THREE.TextureLoader();
+  private paperTextures = new Map<PaperPoseName, THREE.Texture>();
+  private paperMaterial!: THREE.MeshBasicMaterial;
+
+  // Fallback Canvas para reinos sin sprites Paper Mario
+  private canvas: HTMLCanvasElement;
+  private ctx: CanvasRenderingContext2D;
+  private canvasTexture: THREE.CanvasTexture;
+  private canvasMaterial: THREE.MeshBasicMaterial;
+
+  // Parámetros de animación física estilo Paper Mario
+  private baseY = 2.45;
+  private baseScaleX = 1.0;
+  private baseScaleY = 1.0;
+  private flipProgress = 1.0; // 0 a 1 (giro de hoja en eje Y)
+  private isFlipping = false;
+  private hasSwappedInFlip = false;
+  private hopProgress = 1.0; // 0 a 1 (salto elástico en sorpresa)
+  private squashOffset = 0; // compresión / estiramiento elástico
+  private speechTimer = 0; // segundos restantes de charla vocalizada
+  private commandArmRaise = 0;
   private targetCommandArm = 0;
+  private blinkValue = 0;
   private gazeOffset = { x: 0, y: 0 };
-  private jawOpen = 0;
+
+  public onArmrestImpact?: () => void;
 
   constructor(scene: THREE.Scene) {
+    // 1. Textura Canvas procedural de respaldo
     this.canvas = document.createElement('canvas');
     this.canvas.width = 1024;
     this.canvas.height = 1024;
     this.ctx = this.canvas.getContext('2d')!;
 
-    this.texture = new THREE.CanvasTexture(this.canvas);
-    this.texture.colorSpace = THREE.SRGBColorSpace;
-    this.texture.minFilter = THREE.LinearFilter;
+    this.canvasTexture = new THREE.CanvasTexture(this.canvas);
+    this.canvasTexture.colorSpace = THREE.SRGBColorSpace;
+    this.canvasTexture.minFilter = THREE.LinearFilter;
 
-    // Plano 2.5D sentado exactamente dentro del trono 3D (z = -7.6)
-    const geo = new THREE.PlaneGeometry(5.6, 5.6);
-    const mat = new THREE.MeshBasicMaterial({
-      map: this.texture,
+    this.canvasMaterial = new THREE.MeshBasicMaterial({
+      map: this.canvasTexture,
       transparent: true,
       alphaTest: 0.04,
       side: THREE.DoubleSide,
     });
 
-    this.planeMesh = new THREE.Mesh(geo, mat);
-    this.planeMesh.position.set(0, 2.75, -7.65);
+    this.paperMaterial = new THREE.MeshBasicMaterial({
+      transparent: true,
+      alphaTest: 0.02,
+      side: THREE.DoubleSide,
+    });
+
+    // 2. Geometría del plano 2.5D sentado en el trono 3D (z = -7.65)
+    // Proporciones 800:620 optimizadas para los sprites de Paper Mario
+    const geo = new THREE.PlaneGeometry(5.8, 4.5);
+    this.planeMesh = new THREE.Mesh(geo, this.canvasMaterial);
+    this.planeMesh.position.set(0, this.baseY, -7.65);
     this.group.add(this.planeMesh);
 
-    // Sello Arcano que brilla junto a la mano del jefe cuando ordena mover la marioneta
+    // 3. Sombra proyectada de papel en el respaldo del trono (Paper Mario Drop Shadow)
+    const shadowGeo = new THREE.PlaneGeometry(5.6, 4.4);
+    const shadowMat = new THREE.MeshBasicMaterial({
+      color: 0x050308,
+      transparent: true,
+      opacity: 0.38,
+      side: THREE.DoubleSide,
+    });
+    this.shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
+    this.shadowMesh.position.set(0.12, this.baseY - 0.08, -7.72);
+    this.group.add(this.shadowMesh);
+
+    // 4. Sello Arcano que brilla junto a la mano del jefe en la orden imperial
     const sigilGeo = new THREE.RingGeometry(0.35, 0.52, 6);
     const sigilMat = new THREE.MeshBasicMaterial({
       color: 0xffd166,
@@ -121,38 +173,149 @@ export class AnimeBossThroneActor {
       side: THREE.DoubleSide,
     });
     this.commandSigilRing = new THREE.Mesh(sigilGeo, sigilMat);
-    this.commandSigilRing.position.set(1.25, 3.35, -7.2);
+    this.commandSigilRing.position.set(1.35, 3.4, -7.2);
     PostProcessingPipeline.markForSelectiveBloom(this.commandSigilRing);
     this.group.add(this.commandSigilRing);
 
     scene.add(this.group);
+    this.preloadKingPaperSprites();
+  }
+
+  private preloadKingPaperSprites(): void {
+    const poses: PaperPoseName[] = [
+      'idle', 'thinking', 'calculating',
+      'taunt', 'surprised', 'irritated',
+      'fury_slam', 'focus_lean', 'defeat'
+    ];
+
+    poses.forEach((p) => {
+      this.paperTextureLoader.load(
+        `/assets/characters/king/sprites/${p}.png`,
+        (tex) => {
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.minFilter = THREE.LinearFilter;
+          tex.magFilter = THREE.LinearFilter;
+          this.paperTextures.set(p, tex);
+
+          // Si el rey ya está activo y es la pose inicial, aplicarla
+          if (this.isPaperMode && this.currentPose === p) {
+            this.paperMaterial.map = tex;
+            this.paperMaterial.needsUpdate = true;
+          }
+        }
+      );
+    });
   }
 
   public loadBossForRealm(realm: RealmConfig): void {
     this.currentRealm = realm;
-    this.externalSprite = null;
 
     const sigilMat = this.commandSigilRing.material as THREE.MeshBasicMaterial;
     sigilMat.color.setHex(realm.palette.accent);
 
-    // Si el usuario añade un retrato Anime PNG real en public/assets/bosses/<id>.png, se carga automáticamente
-    const img = new Image();
-    img.src = `/assets/bosses/${realm.id}.png`;
-    img.onload = () => {
-      this.externalSprite = img;
-    };
+    if (realm.id === 'eternal_crown') {
+      // Activar modo Paper Mario con los sprites 2K recortados
+      this.isPaperMode = true;
+      this.planeMesh.material = this.paperMaterial;
+      this.shadowMesh.visible = true;
+      this.applyPaperPose(this.mapStateToPose(this.currentState), false);
+    } else {
+      // Reinos sin sprites dedicados usan el motor procedural canvas
+      this.isPaperMode = false;
+      this.planeMesh.material = this.canvasMaterial;
+      this.shadowMesh.visible = false;
+    }
   }
 
   /**
-   * Activa la pose de "Orden de Titiritero": el jefe levanta su mano desde el trono
-   * e invoca el sello rúnico que controla la mano de títere sobre el tablero.
+   * Mapea los 18 estados emocionales del juego a las 9 poses de Paper Mario.
    */
-  public setPuppetCommandGesture(active: boolean): void {
-    this.targetCommandArm = active ? 1.0 : 0.0;
+  private mapStateToPose(state: CharacterAnimationState): PaperPoseName {
+    switch (state) {
+      case 'Idle':
+        return 'idle';
+      case 'Thinking':
+        return 'thinking';
+      case 'DeepThinking':
+        return 'calculating';
+      case 'Capture':
+      case 'Taunt':
+      case 'Confident':
+      case 'Victory':
+      case 'Laugh':
+      case 'BrilliantMove':
+        return 'taunt';
+      case 'Surprised':
+      case 'Curious':
+        return 'surprised';
+      case 'Check':
+      case 'Blunder':
+        return 'fury_slam';
+      case 'PieceLost':
+      case 'Annoyed':
+        return 'irritated';
+      case 'Defeat':
+      case 'Checkmate':
+        return 'defeat';
+      case 'Respect':
+        return 'focus_lean';
+      default:
+        return 'idle';
+    }
   }
 
   public setAnimationState(state: CharacterAnimationState): void {
+    const prevState = this.currentState;
     this.currentState = state;
+
+    if (this.isPaperMode) {
+      const newPose = this.mapStateToPose(state);
+      if (newPose !== this.currentPose) {
+        this.triggerPaperFlip(newPose);
+      }
+
+      // Reacciones físicas particulares al estilo Paper Mario
+      if (state === 'Surprised') {
+        this.hopProgress = 0; // Salto vertical elástico
+      } else if (state === 'Check') {
+        // En Jaque, impacto furioso de puño contra el trono
+        this.squashOffset = 0.18;
+        setTimeout(() => {
+          this.onArmrestImpact?.();
+          this.squashOffset = -0.22;
+        }, 140);
+      }
+    }
+  }
+
+  /**
+   * Giros en el eje Y tipo "Hoja de Papel" (Paper Flip de Paper Mario)
+   */
+  private triggerPaperFlip(targetPose: PaperPoseName): void {
+    this.targetPose = targetPose;
+    this.flipProgress = 0;
+    this.isFlipping = true;
+    this.hasSwappedInFlip = false;
+  }
+
+  private applyPaperPose(pose: PaperPoseName, instant = true): void {
+    this.currentPose = pose;
+    const tex = this.paperTextures.get(pose);
+    if (tex) {
+      this.paperMaterial.map = tex;
+      this.paperMaterial.needsUpdate = true;
+    }
+  }
+
+  public setPuppetCommandGesture(active: boolean): void {
+    this.targetCommandArm = active ? 1.0 : 0.0;
+    if (this.isPaperMode && active) {
+      this.triggerPaperFlip('taunt');
+    }
+  }
+
+  public triggerSpeechVocalization(durationMs: number): void {
+    this.speechTimer = durationMs / 1000;
   }
 
   public setGazeTarget(normX: number, normY: number): void {
@@ -163,47 +326,92 @@ export class AnimeBossThroneActor {
   public update(deltaSec: number, elapsedSec: number): void {
     if (!this.currentRealm) return;
 
-    // 1. Interpolación suave del brazo de mando y sello arcano
+    // 1. Sello arcano de la mano de títere
     this.commandArmRaise += (this.targetCommandArm - this.commandArmRaise) * Math.min(1, deltaSec * 8);
     const sigilMat = this.commandSigilRing.material as THREE.MeshBasicMaterial;
     sigilMat.opacity = this.commandArmRaise * 0.85;
     this.commandSigilRing.rotation.z = elapsedSec * 2.2;
     this.commandSigilRing.scale.setScalar(0.8 + this.commandArmRaise * 0.4);
 
-    // 2. Parpadeo estocástico natural
-    const blinkCycle = elapsedSec % 4.3;
-    this.blinkValue = blinkCycle > 4.12 ? Math.sin(((blinkCycle - 4.12) / 0.18) * Math.PI) : 0;
-
-    // 3. Respiración sutil del plano 2.5D en el trono
-    this.planeMesh.scale.y = 1.0 + Math.sin(elapsedSec * 1.9) * 0.012;
-
-    this.renderAnimeBossCanvas(elapsedSec);
-    this.texture.needsUpdate = true;
+    if (this.isPaperMode) {
+      this.updatePaperMarioKinematics(deltaSec, elapsedSec);
+    } else {
+      this.updateCanvasMode(deltaSec, elapsedSec);
+    }
   }
 
   /**
-   * Genera un retrato 2D en miniatura (DataURL) con estética Anime Seinen
-   * para usar en la barra inferior del Selector de Reinos y en el retrato grande.
+   * Cinemática Procedural Oficial de Paper Mario:
+   * - Balanceo pendular continuo (Paper Rocking)
+   * - Giro de carta en 3D al cambiar de expresión (Paper Flip)
+   * - Rebote elástico al hablar o reaccionar (Squash & Stretch)
+   * - Salto de susto (Paper Hop)
    */
-  public static renderPortraitDataURL(realm: RealmConfig): string {
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = 512;
-    tempCanvas.height = 512;
-    const ctx = tempCanvas.getContext('2d')!;
-    ctx.scale(0.5, 0.5);
-    AnimeBossThroneActor.drawAnimeCharacter(ctx, realm, 'Confident', 0, 0, { x: 0, y: 0 }, 0);
-    return tempCanvas.toDataURL();
-  }
+  private updatePaperMarioKinematics(deltaSec: number, elapsedSec: number): void {
+    // 1. Efecto de Giro de Hoja de Papel (Paper Flip)
+    if (this.isFlipping) {
+      this.flipProgress += deltaSec / 0.22; // Duración: 220ms
 
-  private renderAnimeBossCanvas(elapsedSec: number): void {
-    const ctx = this.ctx;
-    ctx.clearRect(0, 0, 1024, 1024);
+      if (this.flipProgress < 0.5) {
+        // Se comprime hasta verse como el grosor de una hoja (escala X -> 0)
+        const t = this.flipProgress / 0.5;
+        this.baseScaleX = Math.max(0.005, 1.0 - t);
+      } else {
+        if (!this.hasSwappedInFlip) {
+          this.applyPaperPose(this.targetPose, false);
+          this.hasSwappedInFlip = true;
+        }
+        // Se expande hacia el otro lado con rebote elástico (overshoot)
+        const t = (this.flipProgress - 0.5) / 0.5;
+        const overshoot = 1.0 + Math.sin(t * Math.PI) * 0.18;
+        this.baseScaleX = THREE.MathUtils.lerp(0.05, 1.0, t) * overshoot;
+      }
 
-    if (this.externalSprite) {
-      ctx.drawImage(this.externalSprite, 0, 0, 1024, 1024);
-      return;
+      if (this.flipProgress >= 1.0) {
+        this.baseScaleX = 1.0;
+        this.isFlipping = false;
+      }
     }
 
+    // 2. Salto elástico de sorpresa (Paper Hop)
+    let hopOffset = 0;
+    if (this.hopProgress < 1.0) {
+      this.hopProgress += deltaSec / 0.32;
+      hopOffset = Math.sin(Math.min(1, this.hopProgress) * Math.PI) * 0.42;
+    }
+
+    // 3. Charloteo de boca/cuerpo en diálogos (Paper Speech Chatter)
+    let chatterSquash = 0;
+    if (this.speechTimer > 0) {
+      this.speechTimer -= deltaSec;
+      chatterSquash = Math.sin(elapsedSec * 24.0) * 0.045;
+    }
+
+    // 4. Decaimiento de compresión/estiramiento (Squash Decay)
+    this.squashOffset *= Math.max(0, 1 - deltaSec * 6);
+
+    // 5. Balanceo pendular característico de Paper Mario (Paper Rocking)
+    const rockAngle = Math.sin(elapsedSec * 2.8) * 0.034;
+    const idleBob = Math.sin(elapsedSec * 5.6) * 0.018;
+
+    this.planeMesh.rotation.z = rockAngle;
+    this.planeMesh.position.y = this.baseY + hopOffset + idleBob * 0.5;
+    this.planeMesh.scale.x = this.baseScaleX * (1.0 - (this.squashOffset + chatterSquash) * 0.7);
+    this.planeMesh.scale.y = this.baseScaleY * (1.0 + this.squashOffset + chatterSquash + idleBob);
+
+    // 6. Sombra de papel que sigue el balanceo
+    this.shadowMesh.rotation.z = rockAngle * 0.85;
+    this.shadowMesh.position.y = this.baseY - 0.08 + hopOffset * 0.8;
+    this.shadowMesh.scale.copy(this.planeMesh.scale);
+  }
+
+  private updateCanvasMode(deltaSec: number, elapsedSec: number): void {
+    const blinkCycle = elapsedSec % 4.3;
+    this.blinkValue = blinkCycle > 4.12 ? Math.sin(((blinkCycle - 4.12) / 0.18) * Math.PI) : 0;
+    this.planeMesh.scale.y = 1.0 + Math.sin(elapsedSec * 1.9) * 0.012;
+
+    const ctx = this.ctx;
+    ctx.clearRect(0, 0, 1024, 1024);
     AnimeBossThroneActor.drawAnimeCharacter(
       ctx,
       this.currentRealm,
@@ -213,12 +421,27 @@ export class AnimeBossThroneActor {
       this.gazeOffset,
       elapsedSec
     );
+    this.canvasTexture.needsUpdate = true;
   }
 
   /**
-   * Ilustrador Cel-Shaded estilo Anime Seinen (trazos negros afilados, sombreado duro de 3 capas,
-   * anatomía imponente sentada en el trono y gesto de titiritero).
+   * Genera la miniatura o retrato para el Selector de Reinos:
+   * Para el Rey (eternal_crown) entrega directamente su arte Paper Mario.
    */
+  public static renderPortraitDataURL(realm: RealmConfig): string {
+    if (realm.id === 'eternal_crown') {
+      return '/assets/characters/king/hero_full.png';
+    }
+
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = 512;
+    tempCanvas.height = 512;
+    const ctx = tempCanvas.getContext('2d')!;
+    ctx.scale(0.5, 0.5);
+    AnimeBossThroneActor.drawAnimeCharacter(ctx, realm, 'Confident', 0, 0, { x: 0, y: 0 }, 0);
+    return tempCanvas.toDataURL();
+  }
+
   public static drawAnimeCharacter(
     ctx: CanvasRenderingContext2D,
     realm: RealmConfig,
@@ -233,7 +456,6 @@ export class AnimeBossThroneActor {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // Aura oscura/mágica de Jefe Final detrás de los hombros
     const auraGrad = ctx.createRadialGradient(512, 460, 60, 512, 460, 420);
     auraGrad.addColorStop(0, `${s.armorTrim}55`);
     auraGrad.addColorStop(0.5, `${s.capeColor}33`);
@@ -243,7 +465,7 @@ export class AnimeBossThroneActor {
     ctx.arc(512, 460, 420, 0, Math.PI * 2);
     ctx.fill();
 
-    // 1. CAPA IMPERIAL Y HOMBROS ANCHOS (Estilo Anime Seinen)
+    // Capa y Hombros
     ctx.fillStyle = s.capeColor;
     ctx.strokeStyle = '#09070c';
     ctx.lineWidth = 7;
@@ -255,14 +477,7 @@ export class AnimeBossThroneActor {
     ctx.fill();
     ctx.stroke();
 
-    // Pliegues dramáticos en negro puro (estilo Mignola / Seinen)
-    ctx.fillStyle = '#09070c';
-    ctx.beginPath();
-    ctx.moveTo(310, 610); ctx.lineTo(360, 960); ctx.lineTo(280, 960); ctx.closePath();
-    ctx.moveTo(714, 610); ctx.lineTo(664, 960); ctx.lineTo(744, 960); ctx.closePath();
-    ctx.fill();
-
-    // 2. TORSO ACORAZADO Y HOMBRERAS MONUMENTALES
+    // Torso acorazado
     ctx.fillStyle = s.armorColor;
     ctx.beginPath();
     ctx.moveTo(270, 560);
@@ -274,49 +489,26 @@ export class AnimeBossThroneActor {
     ctx.fill();
     ctx.stroke();
 
-    // Bordes dorados/metálicos de la coraza
     ctx.strokeStyle = s.armorTrim;
     ctx.lineWidth = 8;
     ctx.beginPath();
     ctx.moveTo(320, 565); ctx.lineTo(512, 750); ctx.lineTo(704, 565);
     ctx.stroke();
 
-    // Hombreras angulares afiladas
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = '#09070c';
-    for (const dir of [-1, 1]) {
-      ctx.save();
-      ctx.translate(512 + dir * 255, 595);
-      ctx.scale(dir, 1);
-      ctx.fillStyle = s.armorColor;
-      ctx.beginPath();
-      ctx.moveTo(-70, -45); ctx.lineTo(95, -20); ctx.lineTo(125, 45); ctx.lineTo(-55, 55); ctx.closePath();
-      ctx.fill(); ctx.stroke();
-      ctx.strokeStyle = s.armorTrim; ctx.lineWidth = 5;
-      ctx.strokeRect(-45, -25, 115, 55);
-      ctx.restore();
-    }
-
-    // 3. CUELLO ANATÓMICO CON SOMBRA DURA PROYECTADA POR LA MANDÍBULA
+    // Cuello
     ctx.fillStyle = s.skinCelShadow;
     ctx.strokeStyle = '#09070c';
     ctx.lineWidth = 6;
     ctx.fillRect(452, 435, 120, 125);
     ctx.strokeRect(452, 435, 120, 125);
 
-    // Sombra triangular profunda bajo el mentón
-    ctx.fillStyle = s.skinDeepShadow;
-    ctx.beginPath();
-    ctx.moveTo(452, 445); ctx.lineTo(572, 445); ctx.lineTo(512, 525); ctx.closePath();
-    ctx.fill();
-
-    // 4. ROSTRO ANIME SEINEN (Mandíbula en V afilada, Pómulos marcados, Cel-Shading lateral)
+    // Rostro Seinen
     ctx.fillStyle = s.skinBase;
     ctx.beginPath();
     ctx.moveTo(385, 250);
     ctx.lineTo(392, 385);
     ctx.lineTo(448, 468);
-    ctx.lineTo(512, 492); // Mentón afilado
+    ctx.lineTo(512, 492);
     ctx.lineTo(576, 468);
     ctx.lineTo(632, 385);
     ctx.lineTo(639, 250);
@@ -324,7 +516,6 @@ export class AnimeBossThroneActor {
     ctx.closePath();
     ctx.fill();
 
-    // Sombra Cel-Shading en la mitad derecha del rostro para dramatismo
     ctx.fillStyle = s.skinCelShadow;
     ctx.beginPath();
     ctx.moveTo(512, 215);
@@ -337,31 +528,13 @@ export class AnimeBossThroneActor {
     ctx.fill();
     ctx.stroke();
 
-    // Líneas de pómulos y arrugas severas de veterano
-    ctx.strokeStyle = s.skinDeepShadow;
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.moveTo(415, 365); ctx.lineTo(442, 405);
-    ctx.moveTo(609, 365); ctx.lineTo(582, 405);
-    ctx.moveTo(475, 315); ctx.lineTo(492, 332);
-    ctx.moveTo(549, 315); ctx.lineTo(532, 332);
-    ctx.stroke();
-
-    // 5. OJOS ESTILO ANIME (Rasgados, Mirada Intimidante, Brillo de Poder)
+    // Ojos
     const isAngry = state === 'Check' || state === 'PieceLost' || state === 'Checkmate';
     const eyeOpenH = Math.max(2, 22 * (1 - blink));
 
     for (const dir of [-1, 1]) {
       const ex = 512 + dir * 56;
       const ey = 336;
-
-      // Sombra profunda de la cuenca ocular
-      ctx.fillStyle = s.skinDeepShadow;
-      ctx.beginPath();
-      ctx.ellipse(ex, ey - 4, 34, 16, dir * 0.08, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Esclerótica afilada
       ctx.fillStyle = '#f8fafc';
       ctx.strokeStyle = '#09070c';
       ctx.lineWidth = 4.5;
@@ -374,41 +547,18 @@ export class AnimeBossThroneActor {
       ctx.stroke();
 
       if (blink < 0.85) {
-        // Iris detallado con pupila contraída de jefe final
         const ix = ex + gaze.x * 8;
         const iy = ey + gaze.y * 5;
         ctx.fillStyle = s.eyeColor;
         ctx.beginPath();
         ctx.arc(ix, iy, 10, 0, Math.PI * 2);
         ctx.fill();
-
-        ctx.fillStyle = '#09070c';
-        ctx.beginPath();
-        ctx.arc(ix, iy, 4.2, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Destello blanco anime
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(ix - 3.5, iy - 3.5, 2.8, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Estela luminosa si está dando una orden de títere o en furia
-        if (s.eyeGlow || armCommand > 0.2 || isAngry) {
-          ctx.strokeStyle = s.eyeColor;
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          ctx.moveTo(ix, iy);
-          ctx.lineTo(ix + dir * 26, iy - 14);
-          ctx.stroke();
-        }
       }
 
-      // Ceja afilada expresiva
       ctx.strokeStyle = '#09070c';
       ctx.fillStyle = s.hairColor;
       ctx.lineWidth = 3;
-      const browTilt = isAngry ? 14 : state === 'Surprised' ? -10 : 6;
+      const browTilt = isAngry ? 14 : 6;
       ctx.beginPath();
       ctx.moveTo(ex - dir * 32, ey - 18 + browTilt);
       ctx.lineTo(ex + dir * 34, ey - 26 - browTilt * 0.5);
@@ -418,84 +568,23 @@ export class AnimeBossThroneActor {
       ctx.stroke();
     }
 
-    // 6. NARIZ AFILADA CON SOMBRA LATERAL CEL-SHADED
+    // Nariz y boca
     ctx.fillStyle = s.skinDeepShadow;
     ctx.strokeStyle = '#09070c';
     ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.moveTo(512, 328);
-    ctx.lineTo(498, 398);
-    ctx.lineTo(516, 404);
+    ctx.moveTo(512, 328); ctx.lineTo(498, 398); ctx.lineTo(516, 404);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
-    // 7. BOCA Y EXPRESIÓN DE MANDO / DESPRECIO
     ctx.strokeStyle = '#09070c';
     ctx.lineWidth = 4.5;
     ctx.beginPath();
-    if (state === 'Capture' || state === 'Taunt' || state === 'Confident') {
-      // Sonrisa asimétrica arrogante de villano de anime
-      ctx.moveTo(476, 436);
-      ctx.quadraticCurveTo(512, 438, 552, 422);
-    } else if (isAngry) {
-      // Dientes apretados en furia
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(480, 428, 64, 16);
-      ctx.strokeRect(480, 428, 64, 16);
-    } else {
-      ctx.moveTo(482, 434);
-      ctx.lineTo(542, 434);
-    }
+    ctx.moveTo(482, 434); ctx.lineTo(542, 434);
     ctx.stroke();
 
-    // 8. RASGOS DISTINTIVOS DEL GOBERNANTE (Barba Real Esculpida, Cuernos, Corona, etc.)
     AnimeBossThroneActor.drawBossUniqueFeatures(ctx, s);
-
-    // 9. BRAZOS APOYADOS EN EL TRONO + GESTO DE ORDEN AL TÍTERE
-    // Brazo izquierdo firme sobre el reposabrazos izquierdo
-    ctx.fillStyle = s.armorColor;
-    ctx.strokeStyle = '#09070c';
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.moveTo(235, 620); ctx.lineTo(175, 860); ctx.lineTo(310, 910); ctx.lineTo(330, 845); ctx.lineTo(255, 815);
-    ctx.closePath();
-    ctx.fill(); ctx.stroke();
-
-    // Brazo derecho: sube con aura mágica cuando da la orden a la Mano de Títere (armCommand > 0)
-    const handX = 725 + armCommand * 45;
-    const handY = 885 - armCommand * 360;
-
-    ctx.fillStyle = s.armorColor;
-    ctx.beginPath();
-    ctx.moveTo(785, 620);
-    ctx.lineTo(845, 790 - armCommand * 120);
-    ctx.lineTo(handX + 35, handY + 25);
-    ctx.lineTo(handX - 25, handY - 25);
-    ctx.lineTo(755, 760 - armCommand * 110);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // Mano enguantada del jefe (con dedos extendidos en pose de titiritero cuando da una orden)
-    ctx.fillStyle = s.armorTrim;
-    ctx.beginPath();
-    ctx.arc(handX, handY, 28, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    if (armCommand > 0.15) {
-      // Hilos de energía dorada que suben desde los dedos del jefe hacia el techo del salón
-      ctx.strokeStyle = s.armorTrim;
-      ctx.lineWidth = 3;
-      for (let f = -2; f <= 2; f++) {
-        ctx.beginPath();
-        ctx.moveTo(handX + f * 10, handY - 20);
-        ctx.lineTo(handX + f * 35, 0);
-        ctx.stroke();
-      }
-    }
-
     ctx.restore();
   }
 
@@ -504,66 +593,29 @@ export class AnimeBossThroneActor {
     ctx.lineWidth = 5;
 
     if (s.feature === 'king_beard' || s.feature === 'dwarf_braids' || s.feature === 'viking_furs') {
-      // Barba puntiaguda con mechones dinámicos anime
       ctx.fillStyle = s.hairColor;
       ctx.beginPath();
-      ctx.moveTo(392, 385);
-      ctx.lineTo(445, 455);
-      ctx.lineTo(512, 462);
-      ctx.lineTo(579, 455);
-      ctx.lineTo(632, 385);
-      ctx.lineTo(605, 535);
-      ctx.lineTo(555, 595);
-      ctx.lineTo(512, 635);
-      ctx.lineTo(469, 595);
-      ctx.lineTo(419, 535);
+      ctx.moveTo(392, 385); ctx.lineTo(445, 455); ctx.lineTo(512, 462); ctx.lineTo(579, 455); ctx.lineTo(632, 385);
+      ctx.lineTo(605, 535); ctx.lineTo(555, 595); ctx.lineTo(512, 635); ctx.lineTo(469, 595); ctx.lineTo(419, 535);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
-
-      // Bigote imperial afilado
-      ctx.beginPath();
-      ctx.moveTo(512, 408);
-      ctx.lineTo(435, 438);
-      ctx.lineTo(455, 415);
-      ctx.moveTo(512, 408);
-      ctx.lineTo(589, 438);
-      ctx.lineTo(569, 415);
-      ctx.stroke();
     }
 
-    // Cabello con mechones largos laterales y Corona / Cuernos
     ctx.fillStyle = s.hairColor;
     ctx.beginPath();
-    ctx.moveTo(375, 275);
-    ctx.lineTo(335, 465);
-    ctx.lineTo(388, 415);
-    ctx.lineTo(395, 240);
-    ctx.lineTo(629, 240);
-    ctx.lineTo(636, 415);
-    ctx.lineTo(689, 465);
-    ctx.lineTo(649, 275);
+    ctx.moveTo(375, 275); ctx.lineTo(335, 465); ctx.lineTo(388, 415); ctx.lineTo(395, 240);
+    ctx.lineTo(629, 240); ctx.lineTo(636, 415); ctx.lineTo(689, 465); ctx.lineTo(649, 275);
     ctx.quadraticCurveTo(512, 165, 375, 275);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
-    // Corona gótica puntiaguda / Cuernos imponentes
     ctx.fillStyle = s.armorTrim;
     ctx.beginPath();
-    if (s.feature === 'dragon_horns' || s.feature === 'orc_tusks') {
-      ctx.moveTo(395, 225); ctx.lineTo(275, 75); ctx.lineTo(445, 195);
-      ctx.moveTo(629, 225); ctx.lineTo(749, 75); ctx.lineTo(579, 195);
-    } else {
-      ctx.moveTo(380, 235);
-      ctx.lineTo(395, 135);
-      ctx.lineTo(452, 195);
-      ctx.lineTo(512, 95);
-      ctx.lineTo(572, 195);
-      ctx.lineTo(629, 135);
-      ctx.lineTo(644, 235);
-      ctx.closePath();
-    }
+    ctx.moveTo(380, 235); ctx.lineTo(395, 135); ctx.lineTo(452, 195); ctx.lineTo(512, 95); ctx.lineTo(572, 195);
+    ctx.lineTo(629, 135); ctx.lineTo(644, 235);
+    ctx.closePath();
     ctx.fill();
     ctx.stroke();
   }
