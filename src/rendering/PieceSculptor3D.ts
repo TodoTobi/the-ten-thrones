@@ -10,20 +10,20 @@ export class PieceSculptor3D {
   ): THREE.Group {
     const group = new THREE.Group();
 
-    // Materiales PBR adaptados al reino manteniendo contraste claro/oscuro impecable
+    // Materiales PBR AAA adaptados al reino: marfil/alabastro pulido vs obsidiana imperial con clearcoat
     const isWhite = color === 'w';
     const bodyMat = new THREE.MeshPhysicalMaterial({
-      color: isWhite ? realm.boardMaterials.lightSquareColor : realm.palette.secondary,
-      roughness: isWhite ? 0.22 : 0.28,
-      metalness: isWhite ? 0.12 : 0.42,
-      clearcoat: 0.35,
-      clearcoatRoughness: 0.2,
+      color: isWhite ? 0xf5eee4 : 0x221c25,
+      roughness: isWhite ? 0.20 : 0.24,
+      metalness: isWhite ? 0.08 : 0.32,
+      clearcoat: 0.70,
+      clearcoatRoughness: 0.15,
     });
 
     const accentMat = new THREE.MeshStandardMaterial({
-      color: isWhite ? realm.palette.primary : realm.palette.accent,
-      roughness: 0.2,
-      metalness: 0.88,
+      color: isWhite ? 0xd4af37 : (realm.palette.primary || 0xd4af37),
+      roughness: 0.18,
+      metalness: 0.90,
     });
 
     // 1. Pedestal Escalonado Común con Anillo Metálico del Reino
@@ -175,15 +175,57 @@ export class PieceSculptor3D {
       topOrb.position.y = 1.26;
       group.add(topOrb);
     } else if (type === 'k') {
-      // Corona Imperial y Cruz Metálica Biselada
-      const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.26, 0.07), accentMat);
-      const crossH = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.07, 0.07), accentMat);
-      crossV.position.y = 1.46;
-      crossH.position.y = 1.49;
+      // Corona Imperial y Cruz Metálica Biselada (altura final calibrada exactamente en 1.45 unidades)
+      const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.22, 0.07), accentMat);
+      const crossH = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.06, 0.06), accentMat);
+      crossV.position.y = 1.34 + 0.11;
+      crossH.position.y = 1.40;
       crossV.castShadow = true;
       group.add(crossV, crossH);
     }
 
     return group;
+  }
+
+  private static cachedShadowTexture: THREE.CanvasTexture | null = null;
+
+  public static getContactShadowTexture(): THREE.CanvasTexture | null {
+    if (this.cachedShadowTexture) return this.cachedShadowTexture;
+    if (typeof document === 'undefined') return null;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    const grad = ctx.createRadialGradient(32, 32, 4, 32, 32, 30);
+    grad.addColorStop(0, 'rgba(0, 0, 0, 0.85)');
+    grad.addColorStop(0.35, 'rgba(0, 0, 0, 0.55)');
+    grad.addColorStop(0.7, 'rgba(0, 0, 0, 0.2)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 64, 64);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    this.cachedShadowTexture = tex;
+    return tex;
+  }
+
+  public static createContactShadow(): THREE.Mesh {
+    const geo = new THREE.PlaneGeometry(0.82, 0.82);
+    geo.rotateX(-Math.PI / 2);
+    const texture = PieceSculptor3D.getContactShadowTexture();
+    const mat = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      opacity: 0.65,
+      depthWrite: false,
+    });
+    const shadow = new THREE.Mesh(geo, mat);
+    shadow.position.y = 0.002;
+    shadow.name = 'contact_shadow';
+    return shadow;
   }
 }

@@ -18,6 +18,7 @@ export class UIManager {
   private hudBossAvatar!: RivalAvatar2D;
   private selectorBossAvatar!: RivalAvatar2D;
   public onBossArmrestImpact?: () => void;
+  public onScreenChange?: (screenId: string) => void;
 
   public init(profile: SaveProfileData): void {
     this.profile = profile;
@@ -41,6 +42,7 @@ export class UIManager {
   public showScreen(screenId: 'main-menu' | 'realms-screen' | 'hud-screen' | 'settings-modal'): void {
     document.querySelectorAll('.game-screen').forEach((el) => el.classList.add('hidden'));
     document.getElementById(screenId)?.classList.remove('hidden');
+    this.onScreenChange?.(screenId);
   }
 
   public configureHudForRealm(realm: RealmConfig, difficulty: DifficultyLevel): void {
@@ -69,7 +71,7 @@ export class UIManager {
       const thumb = document.createElement('button');
       thumb.type = 'button';
       thumb.className = `boss-roster-thumb ${isUnlocked ? 'unlocked' : 'locked'} ${isSelected ? 'active' : ''}`;
-      const portraitUrl = `/assets/characters/${realm.id}/sprites/idle.png`;
+      const portraitUrl = `/assets/characters/${realm.id}/portrait_thumb.png`;
       thumb.innerHTML = `
         <div class="thumb-portrait"><img src="${portraitUrl}" alt="${realm.rivalName}" style="width:100%;height:100%;object-fit:cover;"/></div>
         <span class="thumb-order">I${realm.order}</span>
@@ -90,7 +92,7 @@ export class UIManager {
     const heroMount = document.getElementById('selector-boss-hero-mount');
     if (heroMount) {
       const heroUrl = AnimeBossThroneActor.renderPortraitDataURL(realm);
-      heroMount.innerHTML = `<img src="${heroUrl}" alt="${realm.rivalName}" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 18px 36px rgba(0,0,0,0.95));"/>`;
+      heroMount.innerHTML = `<img src="${heroUrl}" alt="${realm.rivalName}" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 12px 24px rgba(0,0,0,0.65));"/>`;
     }
 
     // 2. Actualizar Ficha Editorial del Reino

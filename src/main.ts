@@ -52,11 +52,12 @@ class TenThronesGame {
     this.profile = await this.saveSystem.loadProfile();
 
     this.initThreeEngine();
-    this.sceneManager = new SceneManager(this.scene);
+    this.sceneManager = new SceneManager(this.scene, this.renderer);
     this.board3D = new Board3D(this.scene, this.camera, this.renderer.domElement);
     this.rivalHand = new RivalHand3D(this.scene);
     this.bossThroneActor = new AnimeBossThroneActor(this.scene);
     this.bossThroneActor.loadBossForRealm(this.activeRealm);
+    this.bossThroneActor.setVisible(false);
     this.rivalHand.onBossOrderGesture = (active) => {
       this.bossThroneActor.setPuppetCommandGesture(active);
     };
@@ -143,6 +144,10 @@ class TenThronesGame {
       await this.handlePlayerMove(from, to);
     };
 
+    this.uiManager.onScreenChange = (screenId) => {
+      this.bossThroneActor.setVisible(screenId === 'hud-screen');
+    };
+
     this.uiManager.onStartMatch = (realm, difficulty, customFen) => {
       this.startMatch(realm, difficulty, customFen);
     };
@@ -152,6 +157,7 @@ class TenThronesGame {
       this.sceneManager.loadRealmEnvironment(realm, this.profile.settings.graphics.particles);
       this.sceneManager.configureBloomForRealm(realm, this.postProcessing);
       this.bossThroneActor.loadBossForRealm(realm);
+      this.bossThroneActor.setVisible(false);
       this.board3D.buildBoardForRealm(realm);
       this.board3D.syncPiecesFromMatrix(this.rules.getBoardMatrix());
       this.audioManager.playMusic(realm.id as keyof typeof MUSIC_MANIFEST);

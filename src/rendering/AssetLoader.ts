@@ -16,6 +16,8 @@ export interface AssetNormalizationOptions {
 
   alignBottomToZero?: boolean;
 
+  preserveOriginalY?: boolean;
+
   castShadow?: boolean;
 
   receiveShadow?: boolean;
@@ -168,6 +170,7 @@ export class AssetLoader {
     tasks.push(
       this.loadModel(boardUrl, {
         alignBottomToZero: false,
+        preserveOriginalY: true,
       })
     );
 
@@ -228,48 +231,26 @@ export class AssetLoader {
 
 
 
-    // Ajustar material PBR manteniendo mapas de normales/oclusión si el GLB los incluye
-
-    const tintColor = color === 'w' ? 0xf2e9dc : 0x222024;
-
-    const roughness = color === 'w' ? 0.25 : 0.35;
-
-    const metalness = color === 'w' ? 0.15 : 0.45;
-
-
+    // Ajustar material PBR manteniendo contraste vibrante y reflejos especulares de alta fidelidad
+    const tintColor = color === 'w' ? 0xf5eee4 : 0x221c25;
+    const roughness = color === 'w' ? 0.20 : 0.24;
+    const metalness = color === 'w' ? 0.08 : 0.32;
+    const clearcoat = color === 'w' ? 0.65 : 0.75;
 
     clone.traverse((child) => {
-
       const mesh = child as THREE.Mesh;
-
       if (mesh.isMesh) {
-
         mesh.castShadow = true;
-
         mesh.receiveShadow = true;
 
-
-
-        const origMat = mesh.material as THREE.MeshStandardMaterial;
-
-        const newMat = origMat?.isMeshStandardMaterial
-
-          ? origMat.clone()
-
-          : new THREE.MeshStandardMaterial();
-
-
-
-        newMat.color.setHex(tintColor);
-
-        newMat.roughness = roughness;
-
-        newMat.metalness = metalness;
-
-        mesh.material = newMat;
-
+        mesh.material = new THREE.MeshPhysicalMaterial({
+          color: tintColor,
+          roughness,
+          metalness,
+          clearcoat,
+          clearcoatRoughness: 0.15,
+        });
       }
-
     });
 
 
@@ -486,14 +467,12 @@ export class AssetLoader {
 
 
 
-    if (options.alignBottomToZero !== false) {
-
+    if (options.preserveOriginalY) {
+      // Mantener coordenadas verticales originales sin desplazamiento
+    } else if (options.alignBottomToZero !== false) {
       root.position.y -= box.min.y;
-
     } else {
-
       root.position.y -= center.y;
-
     }
 
 

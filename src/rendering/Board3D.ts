@@ -156,112 +156,350 @@ export class Board3D {
 
 
   public setCameraPreset(preset: 'gameplay' | 'cinematic' | 'top'): void {
-
     if (preset === 'gameplay') {
-      this.camera.position.set(0, 6.8, 9.5);
-      this.controls.target.set(0, 0.8, -2.2);
-
+      // Elevated angle centered on the board so White rank 1/2 clears the bottom HUD controls comfortably
+      this.camera.position.set(0, 8.8, 10.6);
+      this.controls.target.set(0, 0.3, 0.4);
     } else if (preset === 'cinematic') {
-
-      this.camera.position.set(4.5, 4.8, 8.8);
-
-      this.controls.target.set(0, 1.2, -2.0);
-
+      this.camera.position.set(4.8, 5.5, 9.2);
+      this.controls.target.set(0, 0.8, -1.0);
     } else {
-
-      this.camera.position.set(0, 13.5, 0.01);
-
+      this.camera.position.set(0, 14.5, 0.01);
       this.controls.target.set(0, 0, 0);
-
     }
-
     this.controls.update();
-
   }
 
 
 
   public buildBoardForRealm(realm: RealmConfig): void {
-
     this.activeRealm = realm;
-
     this.clearBoardGeometry();
-
     this.squaresMap.clear();
 
-
-
     const { lightSquareColor, darkSquareColor, borderColor, roughness, metalness } =
-
       realm.boardMaterials;
 
+    // 1. Placa de asiento e incrustación metálica bajo las 64 casillas (inlay channels)
+    const inlayMat = new THREE.MeshStandardMaterial({
+      color: 0x181412,
+      roughness: 0.25,
+      metalness: 0.85,
+    });
+    const inlayBed = new THREE.Mesh(new THREE.BoxGeometry(8.06, 0.08, 8.06), inlayMat);
+    inlayBed.position.y = -0.01;
+    inlayBed.receiveShadow = true;
+    this.boardGroup.add(inlayBed);
 
-
+    // 2. Marco exterior monumental: se ubica por debajo y alrededor de las casillas, NUNCA sobre ellas
     const customBoard = AssetLoader.getInstance().getClonedBoardSync(realm.id);
     if (customBoard) {
-      customBoard.position.set(0, 0, 0);
+      // Medir el bounding box del modelo GLB importado para garantizar que su reborde superior
+      // quede en y = 0.02 (por debajo del plano de juego de las casillas que está en y = 0.065)
+      const bbox = new THREE.Box3().setFromObject(customBoard);
+      const topY = bbox.max.y;
+      customBoard.position.set(0, 0.02 - topY, 0);
+
+      // Aplicar materiales PBR contrastantes de facción al marco importado
+      customBoard.traverse((child) => {
+        const m = child as THREE.Mesh;
+        if (m.isMesh) {
+          m.castShadow = true;
+          m.receiveShadow = true;
+          m.material = new THREE.MeshStandardMaterial({
+            color: borderColor,
+            roughness: roughness + 0.08,
+            metalness: metalness,
+          });
+        }
+      });
       this.boardGroup.add(customBoard);
     } else {
-      const borderMat = new THREE.MeshStandardMaterial({
+      // Marco escalonado procedural con molduras y zócalo dorado
+      const borderMat = new THREE.MeshPhysicalMaterial({
         color: borderColor,
-        roughness: roughness + 0.1,
-        metalness,
+        roughness: roughness + 0.06,
+        metalness: metalness,
+        clearcoat: 0.5,
+        clearcoatRoughness: 0.2,
       });
-      const borderGeo = new THREE.BoxGeometry(9.2, 0.45, 9.2);
-      const borderMesh = new THREE.Mesh(borderGeo, borderMat);
-      borderMesh.position.y = -0.24;
-      borderMesh.receiveShadow = true;
-      this.boardGroup.add(borderMesh);
+      const borderBase = new THREE.Mesh(new THREE.BoxGeometry(9.6, 0.38, 9.6), borderMat);
+      borderBase.position.y = -0.16;
+      borderBase.receiveShadow = true;
+      borderBase.castShadow = true;
+      this.boardGroup.add(borderBase);
+
+      const borderLipMat = new THREE.MeshStandardMaterial({
+        color: realm.palette.primary || 0xd4af37,
+        roughness: 0.2,
+        metalness: 0.88,
+      });
+      const borderLip = new THREE.Mesh(new THREE.BoxGeometry(8.4, 0.06, 8.4), borderLipMat);
+      borderLip.position.y = 0.01;
+      borderLip.receiveShadow = true;
+      this.boardGroup.add(borderLip);
+
+      // Apliques esquineros dorados de protección y ornamentación
+      const cornerGeo = new THREE.BoxGeometry(0.32, 0.04, 0.32);
+      for (const cx of [-4.35, 4.35]) {
+        for (const cz of [-4.35, 4.35]) {
+          const corner = new THREE.Mesh(cornerGeo, borderLipMat);
+          corner.position.set(cx, 0.035, cz);
+          this.boardGroup.add(corner);
+        }
+      }
     }
 
+    // 3. Notaciones algebraicas nítidas grabadas en el marco (Columnas A-H y Filas 1-8)
+    this.buildRankAndFileNotations(realm.palette.primary || 0xd4af37);
 
+    // 4. Generación de las 64 casillas biseladas con texturas procedurales PBR
+    const sqGeo = this.createBeveledSquareGeometry();
+    const lightTex = this.createSquareTexture(true, lightSquareColor);
+    const darkTex = this.createSquareTexture(false, darkSquareColor);
 
-    const lightMat = new THREE.MeshStandardMaterial({ color: lightSquareColor, roughness, metalness });
+    // Marfil / Alabastro radiante para casillas claras
+    const lightMat = new THREE.MeshPhysicalMaterial({
+      color: lightSquareColor,
+      map: lightTex,
+      roughness: 0.20,
+      metalness: 0.05,
+      clearcoat: 0.70,
+      clearcoatRoughness: 0.15,
+      reflectivity: 0.55,
+    });
 
-    const darkMat = new THREE.MeshStandardMaterial({ color: darkSquareColor, roughness, metalness });
-
-    const sqGeo = new THREE.BoxGeometry(1, 0.12, 1);
-
-
+    // Caoba imperial profundo / Obsidiana volcánica para casillas oscuras
+    const darkMat = new THREE.MeshPhysicalMaterial({
+      color: darkSquareColor,
+      map: darkTex,
+      roughness: 0.18,
+      metalness: 0.15,
+      clearcoat: 0.85,
+      clearcoatRoughness: 0.12,
+      reflectivity: 0.65,
+    });
 
     const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 
     for (let r = 0; r < 8; r++) {
-
       for (let c = 0; c < 8; c++) {
-
         const isLight = (r + c) % 2 === 0;
-
         const sqName = `${files[c]}${8 - r}`;
-
         const mesh = new THREE.Mesh(sqGeo, isLight ? lightMat.clone() : darkMat.clone());
-
         mesh.position.set(c - 3.5, 0, r - 3.5);
-
         mesh.receiveShadow = true;
-
         mesh.userData = {
-
           square: sqName,
-
           isLight,
-
           baseColor: isLight ? lightSquareColor : darkSquareColor,
-
         };
-
         this.squaresMap.set(sqName, mesh);
-
         this.boardGroup.add(mesh);
-
       }
-
     }
 
-
-
     this.boardGroup.add(this.hoverMarker);
+  }
 
+  /**
+   * Crea una geometría biselada con chaflán para casillas de ajedrez estilo AAA.
+   * La cara superior queda a y = 0.065 con ancho 0.98 x 0.98 dejando canal de separación.
+   */
+  private createBeveledSquareGeometry(): THREE.BufferGeometry {
+    const shape = new THREE.Shape();
+    const s = 0.47;
+    shape.moveTo(-s, -s);
+    shape.lineTo(s, -s);
+    shape.lineTo(s, s);
+    shape.lineTo(-s, s);
+    shape.closePath();
+
+    const sqGeo = new THREE.ExtrudeGeometry(shape, {
+      depth: 0.10,
+      bevelEnabled: true,
+      bevelSegments: 2,
+      bevelSize: 0.02,
+      bevelThickness: 0.015,
+    });
+    sqGeo.rotateX(-Math.PI / 2);
+    sqGeo.center();
+    return sqGeo;
+  }
+
+  /**
+   * Genera texturas procedurales en Canvas para Alabastro/Marfil y Caoba/Obsidiana
+   */
+  private createSquareTexture(isLight: boolean, baseHex: number): THREE.CanvasTexture | null {
+    if (typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    const br = (baseHex >> 16) & 255;
+    const bg = (baseHex >> 8) & 255;
+    const bb = baseHex & 255;
+
+    if (isLight) {
+      ctx.fillStyle = `rgb(${br}, ${bg}, ${bb})`;
+      ctx.fillRect(0, 0, 256, 256);
+
+      // Vetas suaves de alabastro / marfil
+      ctx.lineWidth = 4;
+      for (let i = 0; i < 5; i++) {
+        ctx.beginPath();
+        const startX = (i * 50 + 20) % 256;
+        ctx.moveTo(startX, 0);
+        ctx.bezierCurveTo(startX + 35, 80, startX - 25, 160, (startX + 60) % 256, 256);
+        ctx.strokeStyle = `rgba(${Math.min(255, br + 25)}, ${Math.min(255, bg + 20)}, ${Math.min(255, bb + 10)}, 0.32)`;
+        ctx.stroke();
+      }
+
+      // Brillo cristalino de claro
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(0, i * 85 + 30);
+        ctx.bezierCurveTo(90, i * 85 + 60, 170, i * 85 + 10, 256, i * 85 + 40);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.40)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      // Viñeta perimetral de chaflán
+      const grad = ctx.createRadialGradient(128, 128, 90, 128, 128, 130);
+      grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      grad.addColorStop(1, 'rgba(0, 0, 0, 0.12)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 256, 256);
+    } else {
+      ctx.fillStyle = `rgb(${br}, ${bg}, ${bb})`;
+      ctx.fillRect(0, 0, 256, 256);
+
+      // Fina veta longitudinal de caoba real / estrías de obsidiana
+      for (let y = 0; y < 256; y += 3) {
+        const grainIntensity = 0.08 + Math.sin(y * 0.14) * 0.06;
+        ctx.fillStyle = `rgba(255, 180, 130, ${grainIntensity})`;
+        ctx.fillRect(0, y, 256, 1.5);
+      }
+
+      // Ondulaciones orgánicas de madera
+      for (let i = 0; i < 7; i++) {
+        ctx.beginPath();
+        const x = i * 40 + 10;
+        ctx.moveTo(x, 0);
+        ctx.quadraticCurveTo(x + 22, 128, x + 6, 256);
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.38)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+
+      // Viñeta perimetral oscura
+      const grad = ctx.createRadialGradient(128, 128, 85, 128, 128, 130);
+      grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      grad.addColorStop(1, 'rgba(0, 0, 0, 0.35)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 256, 256);
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    return texture;
+  }
+
+  /**
+   * Coloca notaciones de columnas (A-H) y filas (1-8) doradas grabadas en el marco exterior
+   */
+  private buildRankAndFileNotations(accentColorHex: number): void {
+    const files = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    const geo = new THREE.PlaneGeometry(0.38, 0.38);
+    geo.rotateX(-Math.PI / 2);
+
+    // Notación de columnas A-H en bordes inferior y superior
+    for (let c = 0; c < 8; c++) {
+      const texBottom = this.createNotationTexture(files[c], accentColorHex);
+      const matBottom = new THREE.MeshBasicMaterial({
+        map: texBottom,
+        transparent: true,
+        opacity: 0.90,
+        depthWrite: false,
+      });
+      const badgeBottom = new THREE.Mesh(geo, matBottom);
+      badgeBottom.position.set(c - 3.5, 0.032, 4.38);
+      this.boardGroup.add(badgeBottom);
+
+      const texTop = this.createNotationTexture(files[c], accentColorHex);
+      const matTop = new THREE.MeshBasicMaterial({
+        map: texTop,
+        transparent: true,
+        opacity: 0.70,
+        depthWrite: false,
+      });
+      const badgeTop = new THREE.Mesh(geo, matTop);
+      badgeTop.position.set(c - 3.5, 0.032, -4.38);
+      badgeTop.rotation.y = Math.PI;
+      this.boardGroup.add(badgeTop);
+    }
+
+    // Notación de filas 1-8 en bordes izquierdo y derecho
+    for (let r = 0; r < 8; r++) {
+      const rankNum = (8 - r).toString();
+      const texLeft = this.createNotationTexture(rankNum, accentColorHex);
+      const matLeft = new THREE.MeshBasicMaterial({
+        map: texLeft,
+        transparent: true,
+        opacity: 0.90,
+        depthWrite: false,
+      });
+      const badgeLeft = new THREE.Mesh(geo, matLeft);
+      badgeLeft.position.set(-4.38, 0.032, r - 3.5);
+      badgeLeft.rotation.y = Math.PI / 2;
+      this.boardGroup.add(badgeLeft);
+
+      const texRight = this.createNotationTexture(rankNum, accentColorHex);
+      const matRight = new THREE.MeshBasicMaterial({
+        map: texRight,
+        transparent: true,
+        opacity: 0.70,
+        depthWrite: false,
+      });
+      const badgeRight = new THREE.Mesh(geo, matRight);
+      badgeRight.position.set(4.38, 0.032, r - 3.5);
+      badgeRight.rotation.y = -Math.PI / 2;
+      this.boardGroup.add(badgeRight);
+    }
+  }
+
+  /**
+   * Genera un sello de letra o número con tipografía clásica y resplandor dorado
+   */
+  private createNotationTexture(text: string, colorHex: number): THREE.CanvasTexture | null {
+    if (typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.clearRect(0, 0, 128, 128);
+    ctx.font = 'bold 74px "Cinzel", "Georgia", "Times New Roman", serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Sombra grabada en bajorrelieve
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillText(text, 66, 68);
+
+    // Texto dorado
+    const hexStr = '#' + colorHex.toString(16).padStart(6, '0');
+    ctx.fillStyle = hexStr;
+    ctx.fillText(text, 64, 64);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    return texture;
   }
 
 
@@ -321,25 +559,21 @@ export class Board3D {
 
 
   private resolvePieceMesh(type: PieceSymbol, color: PieceColor): THREE.Group {
-
+    let pieceGroup: THREE.Group;
     if (this.activeRealm) {
-
       const glbPiece = AssetLoader.getInstance().getClonedPieceMeshSync(
-
         this.activeRealm,
-
         type,
-
         color
-
       );
-
-      if (glbPiece) return glbPiece;
-
+      pieceGroup = glbPiece ? glbPiece : this.createProceduralPieceMesh(type, color);
+    } else {
+      pieceGroup = this.createProceduralPieceMesh(type, color);
     }
 
-    return this.createProceduralPieceMesh(type, color);
-
+    // Acoplar disco de sombra de contacto para asentar la pieza al ras sobre la casilla
+    pieceGroup.add(PieceSculptor3D.createContactShadow());
+    return pieceGroup;
   }
 
 
@@ -924,19 +1158,18 @@ export class Board3D {
 
 
   private clearBoardGeometry(): void {
-
     const toRemove = this.boardGroup.children.filter((c) => c !== this.hoverMarker);
-
     toRemove.forEach((obj) => {
-
-      const mesh = obj as THREE.Mesh;
-
-      mesh.geometry?.dispose();
-
+      obj.traverse((child) => {
+        const mesh = child as THREE.Mesh;
+        if (mesh.isMesh) {
+          mesh.geometry?.dispose();
+          if (Array.isArray(mesh.material)) mesh.material.forEach((m) => m.dispose());
+          else mesh.material?.dispose();
+        }
+      });
       this.boardGroup.remove(obj);
-
     });
-
   }
 
 

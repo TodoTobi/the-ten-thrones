@@ -106,7 +106,7 @@ export class AnimeBossThroneActor {
   private canvasMaterial: THREE.MeshBasicMaterial;
 
   // Parámetros de animación física estilo Paper Mario
-  private baseY = 2.45;
+  private baseY = 2.85;
   private baseScaleX = 1.0;
   private baseScaleY = 1.0;
   private flipProgress = 1.0; // 0 a 1 (giro de hoja en eje Y)
@@ -247,10 +247,15 @@ export class AnimeBossThroneActor {
     sigilMat.color.setHex(realm.palette.accent);
 
     this.isPaperMode = true;
+    this.group.visible = true;
     this.planeMesh.material = this.paperMaterial;
     this.shadowMesh.visible = true;
     this.loadPaperSpritesForRealm(realm.id);
     this.applyPaperPose(this.mapStateToPose(this.currentState), true);
+  }
+
+  public setVisible(visible: boolean): void {
+    this.group.visible = visible;
   }
 
   /**
