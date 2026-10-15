@@ -267,7 +267,216 @@
     .settings-group { display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px; }
     .settings-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; }
     .settings-row label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
-    .settings-row input[type="range"] { accent-color: var(--gold); }
+    /* Panel de reino y estado en HUD */
+    .hud-realm-panel { min-width: 220px; }
+    .hud-status-panel { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; min-width: 220px; }
+    .hud-actions-bar { display: flex; gap: 10px; flex-wrap: wrap; }
+    .mobile-pgn-btn { display: none !important; }
+    .btn-pgn-close { display: none; }
+
+    /* ==========================================================================
+       RESPONSIVE DESIGN: SMARTPHONES Y TABLETS (Pantallas <= 768px)
+       ========================================================================== */
+    @media (max-width: 768px) {
+      .game-screen {
+        padding: 10px 12px;
+      }
+
+      /* Barra Superior del HUD */
+      .hud-top-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+      }
+      .hud-realm-panel {
+        min-width: 0 !important;
+        flex: 1 1 auto;
+        padding: 6px 10px;
+        overflow: hidden;
+      }
+      #hud-realm-name {
+        font-size: 0.65rem !important;
+        letter-spacing: 0.6px !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #hud-rival-name {
+        font-size: 0.95rem !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #hud-rival-title {
+        display: none !important;
+      }
+      .hud-status-panel {
+        min-width: 0 !important;
+        flex: 0 0 auto;
+        padding: 6px 10px;
+        gap: 3px;
+        align-items: flex-end;
+      }
+      .turn-badge {
+        padding: 4px 8px !important;
+        font-size: 0.72rem !important;
+        letter-spacing: 0.5px !important;
+        white-space: nowrap;
+      }
+      .hud-status-panel div:nth-child(2) {
+        font-size: 0.7rem !important;
+      }
+
+      /* Globo Manga en Celulares */
+      .manga-speech-bubble {
+        position: fixed !important;
+        left: 10px !important;
+        right: 10px !important;
+        top: 66px !important;
+        width: auto !important;
+        max-width: calc(100vw - 20px) !important;
+        padding: 8px 12px !important;
+        border-radius: 10px !important;
+      }
+      .manga-dialogue-text {
+        font-size: 0.88rem !important;
+        line-height: 1.35 !important;
+      }
+      .manga-sound-cue {
+        font-size: 0.68rem !important;
+        letter-spacing: 0.8px !important;
+      }
+
+      /* Barra Inferior del HUD */
+      .hud-bottom-bar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 6px !important;
+        width: 100%;
+      }
+      .hud-pgn-panel {
+        display: none;
+        position: fixed;
+        bottom: 56px;
+        left: 10px;
+        right: 10px;
+        width: auto !important;
+        max-height: 140px;
+        z-index: 60;
+        background: rgba(10, 8, 14, 0.96) !important;
+      }
+      .hud-pgn-panel.mobile-open {
+        display: block !important;
+      }
+      .btn-pgn-close {
+        display: inline-block;
+      }
+      #hud-move-history {
+        width: 100% !important;
+        height: 60px !important;
+        font-size: 0.78rem !important;
+      }
+      .hud-actions-bar {
+        width: 100%;
+        display: flex !important;
+        gap: 6px !important;
+        padding: 6px 8px !important;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        justify-content: flex-start !important;
+        scrollbar-width: none;
+      }
+      .hud-actions-bar::-webkit-scrollbar {
+        display: none;
+      }
+      .mobile-pgn-btn {
+        display: inline-block !important;
+      }
+      .btn-primary {
+        padding: 8px 11px !important;
+        font-size: 0.74rem !important;
+        letter-spacing: 0.6px !important;
+        flex: 0 0 auto;
+      }
+
+      /* Menú Principal */
+      .game-title {
+        font-size: 2.1rem !important;
+        letter-spacing: 3px !important;
+        margin-bottom: 4px !important;
+      }
+      .game-subtitle {
+        font-size: 0.8rem !important;
+        letter-spacing: 1px !important;
+        margin-bottom: 20px !important;
+      }
+      .menu-actions {
+        width: 100% !important;
+        max-width: 280px !important;
+        gap: 10px !important;
+      }
+      .menu-actions .btn-primary {
+        padding: 11px 16px !important;
+        font-size: 0.85rem !important;
+      }
+      #menu-stats-summary {
+        font-size: 0.76rem !important;
+        margin-top: 18px !important;
+      }
+
+      /* Selector de Reinos en Móvil */
+      .rpg-selector-layout {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+        overflow-y: auto;
+        max-height: calc(100vh - 160px);
+      }
+      #selector-boss-hero-mount {
+        width: 100% !important;
+        height: 180px !important;
+        flex-shrink: 0;
+      }
+      .rpg-lore-panel {
+        padding: 12px 14px !important;
+        gap: 8px !important;
+      }
+      #sel-realm-title {
+        font-size: 1.35rem !important;
+      }
+      #sel-rival-name {
+        font-size: 0.9rem !important;
+      }
+      #sel-realm-quote {
+        font-size: 0.8rem !important;
+        padding-left: 8px !important;
+        margin: 4px 0 !important;
+      }
+      #sel-realm-style {
+        font-size: 0.8rem !important;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .realms-roster-bar {
+        padding-top: 4px !important;
+        gap: 6px !important;
+      }
+      .boss-roster-thumb {
+        width: 72px !important;
+        padding: 4px !important;
+      }
+      .thumb-portrait {
+        width: 52px !important;
+        height: 56px !important;
+      }
+      .thumb-name {
+        font-size: 0.65rem !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -323,16 +532,16 @@
 
   <!-- PANTALLA 3 REDISEÑADA: HUD CON JEFE DE MEDIO CUERPO Y GLOBO VINCULADO AL ROSTRO -->
   <section id="hud-screen" class="game-screen hidden">
-    <div class="hud-top-bar" style="display:flex; justify-content:space-between; align-items:flex-start;">
-      <div class="interactive-panel" style="min-width:230px;">
+    <div class="hud-top-bar">
+      <div class="interactive-panel hud-realm-panel">
         <div id="hud-realm-name" style="font-size:0.75rem; color:var(--gold); letter-spacing:1.5px;"></div>
         <div id="hud-rival-name" style="font-size:1.2rem; font-weight:bold; margin-top:2px;"></div>
         <div id="hud-rival-title" style="font-size:0.82rem; color:#bfb29e;"></div>
       </div>
 
-      <div class="interactive-panel" style="display:flex; flex-direction:column; gap:8px; align-items:flex-end; min-width:230px;">
+      <div class="interactive-panel hud-status-panel">
         <div id="hud-turn-indicator" class="turn-badge player-turn">TU TURNO</div>
-        <div style="font-size:0.82rem;">Nivel del Gobernante: <b id="hud-difficulty" style="color:var(--gold);"></b></div>
+        <div style="font-size:0.82rem;">Nivel: <b id="hud-difficulty" style="color:var(--gold);"></b></div>
         <div id="hud-check-alert" class="hidden" style="color:#ff4d6d; font-weight:bold; letter-spacing:1px;">¡JAQUE AL REY!</div>
       </div>
     </div>
@@ -356,20 +565,24 @@
       </div>
     </div>
 
-    <div class="hud-bottom-bar" style="display:flex; justify-content:space-between; align-items:flex-end;">
-      <div class="interactive-panel">
-        <div style="font-size:0.75rem; color:var(--gold); margin-bottom:4px;">REGISTRO REAL DE JUGADAS (PGN)</div>
+    <div class="hud-bottom-bar">
+      <div class="interactive-panel hud-pgn-panel">
+        <div style="font-size:0.75rem; color:var(--gold); margin-bottom:4px; display:flex; justify-content:space-between; align-items:center;">
+          <span>REGISTRO REAL DE JUGADAS (PGN)</span>
+          <button type="button" id="btn-close-pgn" class="btn-pgn-close" style="background:transparent; border:none; color:var(--gold); font-size:0.75rem; cursor:pointer;">✕</button>
+        </div>
         <div id="hud-move-history" style="width:340px; height:76px; overflow-y:auto; font-size:0.85rem;"></div>
       </div>
 
-      <div class="interactive-panel" style="display:flex; gap:10px; flex-wrap:wrap;">
-        <button id="btn-cam-gameplay" class="btn-primary">VISTA DUELO</button>
-        <button id="btn-cam-cinematic" class="btn-primary">VISTA CORTE</button>
-        <button id="btn-cam-top" class="btn-primary">VISTA TÁCTICA</button>
-        <button id="btn-hud-undo" class="btn-primary">DESHACER</button>
-        <button id="btn-hud-restart" class="btn-primary">REINICIAR</button>
-        <button id="btn-hud-settings" class="btn-primary">AJUSTES</button>
-        <button id="btn-hud-resign" class="btn-primary">ABDICAR</button>
+      <div class="interactive-panel hud-actions-bar">
+        <button type="button" id="btn-toggle-pgn-mobile" class="btn-primary mobile-pgn-btn">📜 PGN</button>
+        <button type="button" id="btn-cam-gameplay" class="btn-primary">DUELO</button>
+        <button type="button" id="btn-cam-cinematic" class="btn-primary">CORTE</button>
+        <button type="button" id="btn-cam-top" class="btn-primary">TÁCTICA</button>
+        <button type="button" id="btn-hud-undo" class="btn-primary">DESHACER</button>
+        <button type="button" id="btn-hud-restart" class="btn-primary">REINICIAR</button>
+        <button type="button" id="btn-hud-settings" class="btn-primary">AJUSTES</button>
+        <button type="button" id="btn-hud-resign" class="btn-primary">ABDICAR</button>
       </div>
     </div>
   </section>

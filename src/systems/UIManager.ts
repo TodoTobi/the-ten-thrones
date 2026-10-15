@@ -42,6 +42,19 @@ export class UIManager {
       bubble.addEventListener('click', () => this.hideSpeechBubble());
     }
 
+    const togglePgnMobile = document.getElementById('btn-toggle-pgn-mobile');
+    const pgnPanel = document.querySelector('.hud-pgn-panel');
+    const closePgn = document.getElementById('btn-close-pgn');
+
+    togglePgnMobile?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      pgnPanel?.classList.toggle('mobile-open');
+    });
+    closePgn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      pgnPanel?.classList.remove('mobile-open');
+    });
+
     this.bindMenuButtons();
     this.renderRealmsSelectorRPG();
     this.selectRealmInSelector(REALMS_CONFIG[0]);
@@ -240,6 +253,22 @@ export class UIManager {
     const bubbleHeight = bubble.offsetHeight || 100;
     const screenW = window.innerWidth;
     const screenH = window.innerHeight;
+
+    // En pantallas de celulares o tablets estrechas (<= 768px), centrar el globo
+    // como banner de diálogo cinematográfico debajo de la barra superior
+    if (screenW <= 768) {
+      bubble.classList.add('mobile-speech-bubble');
+      bubble.style.left = '10px';
+      bubble.style.right = '10px';
+      bubble.style.top = '66px';
+      bubble.style.width = 'calc(100vw - 20px)';
+      if (tailEl) tailEl.style.display = 'none';
+      return;
+    }
+
+    bubble.classList.remove('mobile-speech-bubble');
+    bubble.style.right = 'auto';
+    bubble.style.width = 'auto';
 
     if (!isVisible || headY < -60 || headY > screenH + 60) {
       // Posición de respaldo en vista cenital/táctica

@@ -29,85 +29,95 @@ export const MUSIC_MANIFEST = {
 
 
 export class AudioManager {
-
   private ctx: AudioContext | null = null;
-
   private currentAudio: HTMLAudioElement | null = null;
-
   private currentTrackKey: string | null = null;
-
-
+  private pendingPlayOnGesture: HTMLAudioElement | null = null;
+  private isUnlocked = false;
 
   private masterVolume = 0.85;
-
   private musicVolume = 0.7;
-
   private sfxVolume = 0.8;
-
   private muted = false;
 
-
-
-  private ensureContext(): AudioContext | null {
-
-    if (typeof window === 'undefined') return null;
-
-    if (!this.ctx) {
-
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-
-      this.ctx = new AudioCtx();
-
-    }
-
-    if (this.ctx.state === 'suspended') {
-
-      this.ctx.resume().catch(() => {});
-
-    }
-
-    return this.ctx;
-
+  constructor() {
+    this.setupUserInteractionUnlock();
   }
 
+  private setupUserInteractionUnlock(): void {
+    if (typeof window === 'undefined') return;
 
+    const unlockHandler = () => {
+      this.unlockAudio();
+    };
 
-  public playMusic(trackKey: keyof typeof MUSIC_MANIFEST): void {
+    window.addEventListener('pointerdown', unlockHandler, { passive: true });
+    window.addEventListener('touchstart', unlockHandler, { passive: true });
+    window.addEventListener('click', unlockHandler, { passive: true });
+    window.addEventListener('keydown', unlockHandler, { passive: true });
+  }
 
-    if (this.currentTrackKey === trackKey) return;
-
-    this.currentTrackKey = trackKey;
-
-
-
-    const src = MUSIC_MANIFEST[trackKey];
-
-    if (this.currentAudio) {
-
-      this.currentAudio.pause();
-
-      this.currentAudio.src = '';
-
+  public unlockAudio(): void {
+    // 1. Resumir AudioContext si está suspendido
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    } else if (!this.ctx) {
+      this.ensureContext();
     }
 
+    // 2. Reproducir música en cola si el navegador había bloqueado el autoplay
+    if (this.pendingPlayOnGesture) {
+      const audio = this.pendingPlayOnGesture;
+      this.pendingPlayOnGesture = null;
+      audio.play().catch((err) => {
+        console.warn('[AudioManager] Reintento de reproducción tras interacción:', err);
+      });
+    } else if (this.currentAudio && this.currentAudio.paused && !this.muted) {
+      this.currentAudio.play().catch(() => {});
+    }
 
+    this.isUnlocked = true;
+  }
+
+  private ensureContext(): AudioContext | null {
+    if (typeof window === 'undefined') return null;
+    if (!this.ctx) {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (AudioCtx) {
+        this.ctx = new AudioCtx();
+      }
+    }
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
+    return this.ctx;
+  }
+
+  public playMusic(trackKey: keyof typeof MUSIC_MANIFEST): void {
+    if (this.currentTrackKey === trackKey && this.currentAudio && !this.currentAudio.paused) return;
+    this.currentTrackKey = trackKey;
+
+    const rawSrc = MUSIC_MANIFEST[trackKey];
+    const metaEnv = (import.meta as unknown as { env?: { BASE_URL?: string } })?.env;
+    const base = metaEnv?.BASE_URL ? metaEnv.BASE_URL.replace(/\/$/, '') : '';
+    const src = base + rawSrc;
+
+    if (this.currentAudio) {
+      this.currentAudio.pause();
+      this.currentAudio.src = '';
+    }
 
     const audio = new Audio(src);
-
     audio.loop = true;
-
     audio.volume = this.muted ? 0 : this.masterVolume * this.musicVolume;
-
-    audio.play().catch(() => {
-
-      // Si el navegador aún no recibió interacción o el archivo MP3 no se ha copiado aún, se registra sin romper el ciclo
-
-      console.warn(`[AudioManager] Esperando archivo de audio o interacción del usuario para: ${src}`);
-
-    });
-
     this.currentAudio = audio;
 
+    audio.play().catch((err) => {
+      // Si el navegador bloqueó el autoplay por falta de interacción del usuario (común en móviles),
+      // se deja en cola para reproducirse en cuanto el usuario toque cualquier punto de la pantalla
+      console.warn(`[AudioManager] Autoplay esperando interacción del usuario (${err?.name || 'NotAllowedError'}). En cola para el primer toque.`);
+      this.pendingPlayOnGesture = audio;
+    });
   }
 
 

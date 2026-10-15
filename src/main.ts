@@ -109,11 +109,25 @@ class TenThronesGame {
       console.info(`[PerformanceManager] Ajuste dinámico a '${preset.tier.toUpperCase()}' (${fps} FPS medidos)`);
     };
 
+    const updateCameraProjection = () => {
+      const aspect = window.innerWidth / window.innerHeight;
+      this.camera.aspect = aspect;
+      if (aspect < 1.0) {
+        // En pantallas verticales (smartphones portrait), adaptamos el FOV vertical
+        // para que las 8 columnas del tablero y el gobernante en el trono se vean con holgura
+        this.camera.fov = 45 / Math.max(0.52, Math.min(1.0, aspect));
+      } else {
+        this.camera.fov = 45;
+      }
+      this.camera.updateProjectionMatrix();
+    };
+
+    updateCameraProjection();
+
     window.addEventListener('resize', () => {
       const preset = this.performanceManager.getCurrentPreset();
       const pr = Math.min(window.devicePixelRatio || 1, preset.pixelRatioMax) * preset.renderScale;
-      this.camera.aspect = window.innerWidth / window.innerHeight;
-      this.camera.updateProjectionMatrix();
+      updateCameraProjection();
       this.renderer.setSize(window.innerWidth, window.innerHeight);
       this.postProcessing.setSize(window.innerWidth, window.innerHeight, pr);
     });
