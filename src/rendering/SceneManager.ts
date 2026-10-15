@@ -353,11 +353,11 @@ export class SceneManager {
   }
 
   private addThroneTorches(realm: RealmConfig): void {
-    const leftTorch = new THREE.PointLight(realm.palette.primary || 0xffd166, 3.8, 18);
-    leftTorch.position.set(-4.5, 3.5, -6.5);
+    const leftTorch = new THREE.PointLight(realm.palette.primary || 0xffd166, 3.5, 18);
+    leftTorch.position.set(-5.5, 3.2, -7.8);
 
-    const rightTorch = new THREE.PointLight(realm.palette.primary || 0xffd166, 3.8, 18);
-    rightTorch.position.set(4.5, 3.5, -6.5);
+    const rightTorch = new THREE.PointLight(realm.palette.primary || 0xffd166, 3.5, 18);
+    rightTorch.position.set(5.5, 3.2, -7.8);
 
     this.environmentGroup.add(leftTorch, rightTorch);
     this.pointLights.push(leftTorch, rightTorch);
@@ -379,14 +379,14 @@ export class SceneManager {
       metalness: 0.85,
     });
 
-    // Columnas perimetrales alejadas a un radio de 22+ m para no obstaculizar la cámara en ningún ángulo
-    const columnCount = 14;
+    // Columnas perimetrales estrictamente en el hemiciclo de fondo (z <= -13m) para jamás interferir con la cámara
+    const columnCount = 12;
     const colGeo =
       realm.id === 'elven_throne'
-        ? new THREE.CylinderGeometry(0.55, 1.25, 24, 8)
+        ? new THREE.CylinderGeometry(0.45, 0.85, 20, 8)
         : realm.id === 'void_throne'
-        ? new THREE.OctahedronGeometry(1.85, 0)
-        : new THREE.CylinderGeometry(1.0, 1.35, 24, 14);
+        ? new THREE.OctahedronGeometry(1.4, 0)
+        : new THREE.CylinderGeometry(0.75, 1.1, 20, 12);
 
     const instancedColumns = new THREE.InstancedMesh(colGeo, archMat, columnCount);
     instancedColumns.castShadow = true;
@@ -394,49 +394,54 @@ export class SceneManager {
 
     const dummy = new THREE.Object3D();
     for (let i = 0; i < columnCount; i++) {
-      const angle = (i / columnCount) * Math.PI * 1.5 - Math.PI * 1.25;
-      // Radio de 22.5m a 26m garantizando que las columnas nunca corten la visión de la cámara
-      const radius = i % 2 === 0 ? 22.5 : 25.5;
-      dummy.position.set(Math.cos(angle) * radius, 6.0, Math.sin(angle) * radius);
+      // Hemiciclo profundo estrictamente detrás del trono (z de -14m a -26m, x de -22m a +22m)
+      const t = i / (columnCount - 1);
+      const angle = Math.PI * 0.18 + t * Math.PI * 0.64;
+      const radius = 24.0 + (i % 2 === 0 ? 0 : 2.5);
+      const x = Math.cos(angle) * radius;
+      const z = -Math.sin(angle) * (radius * 0.6) - 10.0;
+      dummy.position.set(x, 6.0, z);
       dummy.rotation.y = -angle;
       dummy.updateMatrix();
       instancedColumns.setMatrixAt(i, dummy.matrix);
     }
     this.environmentGroup.add(instancedColumns);
 
-    // Universal 3D props para todos los 10 reinos: Estandartes heráldicos, Braseros de hierro con ascuas y Balaustradas
-    // 1. Estandartes reales de terciopelo y oro flanqueando la sala del trono
-    for (const side of [-5.2, 5.2]) {
+    // Universal 3D props para todos los 10 reinos: Estandartes heráldicos y Braseros de hierro al fondo
+    // 1. Estandartes reales de terciopelo y oro flanqueando el trono al fondo (z = -8.2)
+    for (const side of [-5.5, 5.5]) {
       const banner = AssetLoader.getInstance().getClonedEnvSync('royal_banner');
       if (banner) {
         banner.position.set(side, 3.2, -8.2);
-        banner.scale.set(1.1, 1.1, 1.1);
+        banner.scale.set(1.0, 1.0, 1.0);
         if (side > 0) banner.rotation.y = Math.PI;
         this.styleRoyalBanner(banner, realm);
         this.environmentGroup.add(banner);
       }
     }
 
-    // 2. Braseros de hierro forjado con ascuas incandescentes bajo las antorchas
-    for (const side of [-4.5, 4.5]) {
+    // 2. Braseros de hierro forjado al fondo junto a los estandartes (z = -7.8, escala moderada 0.45)
+    for (const side of [-5.5, 5.5]) {
       const brazier = AssetLoader.getInstance().getClonedEnvSync('brazier_torch');
       if (brazier) {
-        brazier.position.set(side, -0.5, -6.5);
-        brazier.scale.set(0.9, 0.9, 0.9);
+        brazier.position.set(side, -0.5, -7.8);
+        brazier.scale.set(0.45, 0.45, 0.45);
         this.styleBrazier(brazier, realm);
         this.environmentGroup.add(brazier);
       }
-    }
 
-    // 3. Balaustradas de mármol pulido delimitando el fondo del salón
-    for (const side of [-7.6, 7.6]) {
-      const barrier = AssetLoader.getInstance().getClonedEnvSync('stone_barrier');
-      if (barrier) {
-        barrier.position.set(side, -0.5, -1.0);
-        barrier.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
-        this.styleStoneBarrier(barrier, realm);
-        this.environmentGroup.add(barrier);
-      }
+      // Llama viva incandescente sobre cada brasero
+      const flameMat = new THREE.MeshStandardMaterial({
+        color: realm.palette.primary || 0xffaa00,
+        emissive: realm.palette.primary || 0xffaa00,
+        emissiveIntensity: 1.8,
+        roughness: 0.1,
+      });
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.9, 8), flameMat);
+      flame.position.set(side, 1.35, -7.8);
+      PostProcessingPipeline.markForSelectiveBloom(flame);
+      this.environmentGroup.add(flame);
+      this.floatingObjects.push(flame);
     }
 
     // 4. Elementos arquitectónicos emblemáticos y monumentales por facción con materiales PBR contrastantes
@@ -691,30 +696,18 @@ export class SceneManager {
   }
 
   private styleBrazier(group: THREE.Group, realm: RealmConfig): void {
-    const ironMat = new THREE.MeshStandardMaterial({
-      color: 0x1f1d1c,
-      roughness: 0.35,
-      metalness: 0.85,
-    });
-    const emberColor = realm.palette.primary || 0xff9900;
-    const emberMat = new THREE.MeshStandardMaterial({
-      color: emberColor,
-      emissive: emberColor,
-      emissiveIntensity: 1.25,
-      roughness: 0.2,
-      metalness: 0.1,
+    const ironMat = new THREE.MeshPhysicalMaterial({
+      color: 0x3a332d,
+      roughness: 0.32,
+      metalness: 0.82,
+      clearcoat: 0.40,
     });
     group.traverse((child) => {
       const m = child as THREE.Mesh;
       if (m.isMesh) {
         m.castShadow = true;
         m.receiveShadow = true;
-        if (m.position.y > 1.2 || m.name.toLowerCase().includes('fire') || m.name.toLowerCase().includes('coal')) {
-          m.material = emberMat;
-          PostProcessingPipeline.markForSelectiveBloom(m);
-        } else {
-          m.material = ironMat;
-        }
+        m.material = ironMat;
       }
     });
   }

@@ -241,6 +241,13 @@ export class AssetLoader {
       if (mesh.isMesh) {
         mesh.castShadow = true;
         mesh.receiveShadow = true;
+        mesh.frustumCulled = false; // Desactivar culling para que jamás desaparezcan al rotar perspectiva
+
+        if (mesh.geometry) {
+          mesh.geometry.computeVertexNormals();
+          mesh.geometry.computeBoundingBox();
+          mesh.geometry.computeBoundingSphere();
+        }
 
         mesh.material = new THREE.MeshPhysicalMaterial({
           color: tintColor,
@@ -248,6 +255,7 @@ export class AssetLoader {
           metalness,
           clearcoat,
           clearcoatRoughness: 0.15,
+          side: THREE.DoubleSide, // Renderizar ambas caras para que al rotar nunca se vean huecas ni transparentes
         });
       }
     });
@@ -258,11 +266,13 @@ export class AssetLoader {
       color: accentColor,
       roughness: 0.18,
       metalness: 0.90,
+      side: THREE.DoubleSide,
     });
     const baseRing = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.022, 10, 32), accentMat);
     baseRing.rotation.x = Math.PI / 2;
     baseRing.position.y = 0.04;
     baseRing.castShadow = true;
+    baseRing.frustumCulled = false;
     clone.add(baseRing);
 
     // Orientar caballos negros mirando hacia las blancas y viceversa
@@ -482,17 +492,17 @@ export class AssetLoader {
 
 
     root.traverse((child) => {
-
       const mesh = child as THREE.Mesh;
-
       if (mesh.isMesh) {
-
         mesh.castShadow = options.castShadow ?? true;
-
         mesh.receiveShadow = options.receiveShadow ?? true;
-
+        mesh.frustumCulled = false;
+        if (mesh.geometry) {
+          mesh.geometry.computeVertexNormals();
+          mesh.geometry.computeBoundingBox();
+          mesh.geometry.computeBoundingSphere();
+        }
       }
-
     });
 
 
