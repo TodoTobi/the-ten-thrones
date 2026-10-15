@@ -267,6 +267,20 @@ export class SceneManager {
         }
       });
       this.environmentGroup.add(customThrone);
+
+      // Gema real luminosa en el vértice del trono importado
+      const apexGemMat = new THREE.MeshStandardMaterial({
+        color: realm.palette.accent,
+        emissive: realm.palette.accent,
+        emissiveIntensity: 0.85,
+        roughness: 0.1,
+        metalness: 0.2,
+      });
+      const apexGem = new THREE.Mesh(new THREE.OctahedronGeometry(0.32, 0), apexGemMat);
+      apexGem.position.set(0, 6.2, throneZ);
+      PostProcessingPipeline.markForSelectiveBloom(apexGem);
+      this.environmentGroup.add(apexGem);
+
       this.addThroneTorches(realm);
       return;
     }
@@ -390,7 +404,42 @@ export class SceneManager {
     }
     this.environmentGroup.add(instancedColumns);
 
-    // Elementos arquitectónicos emblemáticos por facción con materiales PBR contrastantes
+    // Universal 3D props para todos los 10 reinos: Estandartes heráldicos, Braseros de hierro con ascuas y Balaustradas
+    // 1. Estandartes reales de terciopelo y oro flanqueando la sala del trono
+    for (const side of [-5.2, 5.2]) {
+      const banner = AssetLoader.getInstance().getClonedEnvSync('royal_banner');
+      if (banner) {
+        banner.position.set(side, 3.2, -8.2);
+        banner.scale.set(1.1, 1.1, 1.1);
+        if (side > 0) banner.rotation.y = Math.PI;
+        this.styleRoyalBanner(banner, realm);
+        this.environmentGroup.add(banner);
+      }
+    }
+
+    // 2. Braseros de hierro forjado con ascuas incandescentes bajo las antorchas
+    for (const side of [-4.5, 4.5]) {
+      const brazier = AssetLoader.getInstance().getClonedEnvSync('brazier_torch');
+      if (brazier) {
+        brazier.position.set(side, -0.5, -6.5);
+        brazier.scale.set(0.9, 0.9, 0.9);
+        this.styleBrazier(brazier, realm);
+        this.environmentGroup.add(brazier);
+      }
+    }
+
+    // 3. Balaustradas de mármol pulido delimitando el fondo del salón
+    for (const side of [-7.6, 7.6]) {
+      const barrier = AssetLoader.getInstance().getClonedEnvSync('stone_barrier');
+      if (barrier) {
+        barrier.position.set(side, -0.5, -1.0);
+        barrier.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+        this.styleStoneBarrier(barrier, realm);
+        this.environmentGroup.add(barrier);
+      }
+    }
+
+    // 4. Elementos arquitectónicos emblemáticos y monumentales por facción con materiales PBR contrastantes
     switch (realm.id) {
       case 'eternal_crown': {
         // Ventanal gótico de vitrales iluminado detrás del trono
@@ -407,76 +456,202 @@ export class SceneManager {
           PostProcessingPipeline.markForSelectiveBloom(roseFrame);
           this.environmentGroup.add(roseFrame);
         }
-
-        // Estandartes reales de terciopelo y oro flanqueando la sala del trono
-        for (const side of [-5.2, 5.2]) {
-          const banner = AssetLoader.getInstance().getClonedEnvSync('royal_banner');
-          if (banner) {
-            banner.position.set(side, 3.2, -8.2);
-            banner.scale.set(1.1, 1.1, 1.1);
-            if (side > 0) banner.rotation.y = Math.PI;
-            this.styleRoyalBanner(banner, realm);
-            this.environmentGroup.add(banner);
-          }
-        }
-
-        // Braseros de hierro forjado con ascuas incandescentes
-        for (const side of [-4.5, 4.5]) {
-          const brazier = AssetLoader.getInstance().getClonedEnvSync('brazier_torch');
-          if (brazier) {
-            brazier.position.set(side, -0.5, -6.5);
-            brazier.scale.set(0.9, 0.9, 0.9);
-            this.styleBrazier(brazier);
-            this.environmentGroup.add(brazier);
-          }
-        }
-
-        // Balaustradas de mármol pulido y pasamanos de latón delimitando el fondo
-        for (const side of [-7.6, 7.6]) {
-          const barrier = AssetLoader.getInstance().getClonedEnvSync('stone_barrier');
-          if (barrier) {
-            barrier.position.set(side, -0.5, -1.0);
-            barrier.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
-            this.styleStoneBarrier(barrier, realm);
-            this.environmentGroup.add(barrier);
-          }
-        }
         break;
       }
-      case 'shadow_court': {
-        const roseFrame = new THREE.Mesh(new THREE.RingGeometry(2.6, 3.4, 24), accentMat);
-        roseFrame.position.set(0, 6.8, -12.5);
-        PostProcessingPipeline.markForSelectiveBloom(roseFrame);
-        this.environmentGroup.add(roseFrame);
+      case 'elven_throne': {
+        // Portal arbóreo bioluminiscente con luz esmeralda y arcos lunares plateados
+        const customWindow = AssetLoader.getInstance().getClonedEnvSync('stained_glass_window');
+        if (customWindow) {
+          customWindow.position.set(0, 1.0, -12.5);
+          customWindow.scale.set(1.2, 1.2, 1.2);
+          this.styleStainedGlassWindow(customWindow, realm);
+          PostProcessingPipeline.markForSelectiveBloom(customWindow);
+          this.environmentGroup.add(customWindow);
+        }
+        const moonRing = new THREE.Mesh(new THREE.TorusGeometry(3.6, 0.12, 12, 48), accentMat);
+        moonRing.position.set(0, 6.2, -12.2);
+        PostProcessingPipeline.markForSelectiveBloom(moonRing);
+        this.environmentGroup.add(moonRing);
+        this.floatingObjects.push(moonRing);
+
+        // 4 Linternas de cristal flotantes con floración mística
+        for (let i = 0; i < 4; i++) {
+          const angle = (i / 4) * Math.PI * 2;
+          const lantern = new THREE.Mesh(new THREE.OctahedronGeometry(0.38, 0), accentMat);
+          lantern.position.set(Math.cos(angle) * 6.5, 4.5 + Math.sin(angle) * 1.5, -10.5);
+          PostProcessingPipeline.markForSelectiveBloom(lantern);
+          this.environmentGroup.add(lantern);
+          this.floatingObjects.push(lantern);
+        }
         break;
       }
       case 'iron_bastion': {
-        const cog = new THREE.Mesh(new THREE.TorusGeometry(3.2, 0.35, 8, 12), accentMat);
-        cog.position.set(0, 5.5, -12.0);
-        PostProcessingPipeline.markForSelectiveBloom(cog);
-        this.environmentGroup.add(cog);
-        this.floatingObjects.push(cog);
-        break;
-      }
-      case 'draconic_empire':
-      case 'ash_throne': {
-        for (let side of [-1, 1]) {
-          const fang = new THREE.Mesh(new THREE.ConeGeometry(1.2, 9.5, 5), archMat);
-          fang.position.set(side * 7.5, 2.5, -9.5);
-          fang.rotation.z = side * 0.38;
-          this.environmentGroup.add(fang);
+        // Enorme sistema de engranajes rúnicos de forja enana con lava incandescente
+        const outerCog = new THREE.Mesh(new THREE.TorusGeometry(3.6, 0.42, 8, 16), accentMat);
+        outerCog.position.set(0, 6.0, -12.2);
+        PostProcessingPipeline.markForSelectiveBloom(outerCog);
+        this.environmentGroup.add(outerCog);
+        this.floatingObjects.push(outerCog);
+
+        const innerCog = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.30, 6, 12), archMat);
+        innerCog.position.set(0, 6.0, -12.0);
+        this.environmentGroup.add(innerCog);
+        this.floatingObjects.push(innerCog);
+
+        // Pilares de basalto de fundición a los lados con vetas de magma
+        for (const side of [-6.8, 6.8]) {
+          const forgePylon = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.1, 10, 8), archMat);
+          forgePylon.position.set(side, 3.5, -11.0);
+          forgePylon.castShadow = true;
+          this.environmentGroup.add(forgePylon);
         }
         break;
       }
-      case 'celestial_sanctuary':
-      case 'void_throne': {
+      case 'ash_throne': {
+        // Colosales colmillos y espiras de obsidiana bélica orca con runas de sangre
+        for (const side of [-1, 1]) {
+          const fang1 = new THREE.Mesh(new THREE.ConeGeometry(1.4, 11.0, 4), archMat);
+          fang1.position.set(side * 7.5, 3.0, -10.5);
+          fang1.rotation.z = side * 0.32;
+          fang1.castShadow = true;
+          this.environmentGroup.add(fang1);
+
+          const fang2 = new THREE.Mesh(new THREE.ConeGeometry(0.9, 8.0, 4), archMat);
+          fang2.position.set(side * 5.2, 2.0, -9.5);
+          fang2.rotation.z = -side * 0.22;
+          fang2.castShadow = true;
+          this.environmentGroup.add(fang2);
+        }
+        const warRing = new THREE.Mesh(new THREE.TorusGeometry(3.2, 0.28, 8, 32), accentMat);
+        warRing.position.set(0, 5.8, -12.0);
+        PostProcessingPipeline.markForSelectiveBloom(warRing);
+        this.environmentGroup.add(warRing);
+        this.floatingObjects.push(warRing);
+        break;
+      }
+      case 'draconic_empire': {
+        // Cuernos volcánicos y halo solar de fuego de dragón
+        for (const side of [-1, 1]) {
+          const horn = new THREE.Mesh(new THREE.ConeGeometry(1.5, 12.0, 6), archMat);
+          horn.position.set(side * 7.2, 3.5, -10.2);
+          horn.rotation.z = side * 0.35;
+          horn.castShadow = true;
+          this.environmentGroup.add(horn);
+        }
+        const dragonHalo = new THREE.Mesh(new THREE.RingGeometry(2.8, 3.8, 32), accentMat);
+        dragonHalo.position.set(0, 6.5, -12.0);
+        PostProcessingPipeline.markForSelectiveBloom(dragonHalo);
+        this.environmentGroup.add(dragonHalo);
+        this.floatingObjects.push(dragonHalo);
+        break;
+      }
+      case 'shadow_court': {
+        // Ventanal gótico carmesí de vitrales góticos y rosetón vampírico con bloom
+        const customWindow = AssetLoader.getInstance().getClonedEnvSync('stained_glass_window');
+        if (customWindow) {
+          customWindow.position.set(0, 1.0, -12.5);
+          customWindow.scale.set(1.2, 1.2, 1.2);
+          this.styleStainedGlassWindow(customWindow, realm);
+          PostProcessingPipeline.markForSelectiveBloom(customWindow);
+          this.environmentGroup.add(customWindow);
+        }
+        const roseFrame = new THREE.Mesh(new THREE.RingGeometry(2.8, 3.6, 32), accentMat);
+        roseFrame.position.set(0, 6.8, -12.2);
+        PostProcessingPipeline.markForSelectiveBloom(roseFrame);
+        this.environmentGroup.add(roseFrame);
+        this.floatingObjects.push(roseFrame);
+
+        for (const side of [-6.5, 6.5]) {
+          const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.6, 12, 8), archMat);
+          spire.position.set(side, 4.0, -11.0);
+          spire.castShadow = true;
+          this.environmentGroup.add(spire);
+        }
+        break;
+      }
+      case 'celestial_sanctuary': {
+        // Portal catedralicio con anillos sagrados concéntricos de halos dorados
+        const customWindow = AssetLoader.getInstance().getClonedEnvSync('stained_glass_window');
+        if (customWindow) {
+          customWindow.position.set(0, 1.0, -12.5);
+          customWindow.scale.set(1.2, 1.2, 1.2);
+          this.styleStainedGlassWindow(customWindow, realm);
+          PostProcessingPipeline.markForSelectiveBloom(customWindow);
+          this.environmentGroup.add(customWindow);
+        }
         for (let r = 0; r < 3; r++) {
-          const ring = new THREE.Mesh(new THREE.TorusGeometry(3.2 + r * 1.1, 0.07, 10, 48), accentMat);
-          ring.position.set(0, 4.8, -11.5);
-          ring.rotation.set(r * 0.5, r * 0.8, 0);
+          const ring = new THREE.Mesh(new THREE.TorusGeometry(3.2 + r * 1.1, 0.08, 10, 48), accentMat);
+          ring.position.set(0, 5.5, -11.5);
+          ring.rotation.set(r * 0.45, r * 0.75, 0);
           PostProcessingPipeline.markForSelectiveBloom(ring);
           this.environmentGroup.add(ring);
           this.floatingObjects.push(ring);
+        }
+        break;
+      }
+      case 'snow_dominion': {
+        // Monolitos de hielo glaciar esculpido y halo hexagonal rúnico de ventisca
+        const iceMat = new THREE.MeshPhysicalMaterial({
+          color: 0x93c5fd,
+          roughness: 0.12,
+          metalness: 0.15,
+          transmission: 0.65,
+          thickness: 1.2,
+          clearcoat: 0.95,
+        });
+        for (const side of [-1, 1]) {
+          const glacier = new THREE.Mesh(new THREE.ConeGeometry(1.3, 10.5, 5), iceMat);
+          glacier.position.set(side * 6.8, 3.2, -10.5);
+          glacier.rotation.z = side * 0.28;
+          glacier.castShadow = true;
+          this.environmentGroup.add(glacier);
+        }
+        const frostHex = new THREE.Mesh(new THREE.RingGeometry(2.6, 3.5, 6), accentMat);
+        frostHex.position.set(0, 6.2, -12.2);
+        PostProcessingPipeline.markForSelectiveBloom(frostHex);
+        this.environmentGroup.add(frostHex);
+        this.floatingObjects.push(frostHex);
+        break;
+      }
+      case 'sand_kingdom': {
+        // Ventanal arabesco de sol dorado y crecientes solares de latón
+        const customWindow = AssetLoader.getInstance().getClonedEnvSync('stained_glass_window');
+        if (customWindow) {
+          customWindow.position.set(0, 1.0, -12.5);
+          customWindow.scale.set(1.2, 1.2, 1.2);
+          this.styleStainedGlassWindow(customWindow, realm);
+          PostProcessingPipeline.markForSelectiveBloom(customWindow);
+          this.environmentGroup.add(customWindow);
+        }
+        const crescent = new THREE.Mesh(new THREE.RingGeometry(2.6, 3.3, 32, 1, 0, Math.PI * 1.3), accentMat);
+        crescent.position.set(0, 6.2, -12.0);
+        PostProcessingPipeline.markForSelectiveBloom(crescent);
+        this.environmentGroup.add(crescent);
+        this.floatingObjects.push(crescent);
+
+        for (const side of [-6.4, 6.4]) {
+          const minaret = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.55, 11, 8), archMat);
+          minaret.position.set(side, 3.5, -10.8);
+          minaret.castShadow = true;
+          this.environmentGroup.add(minaret);
+        }
+        break;
+      }
+      case 'void_throne': {
+        // Singularidad del vacío cósmico con 4 anillos de horizonte de sucesos y obeliscos
+        for (let r = 0; r < 4; r++) {
+          const ring = new THREE.Mesh(new THREE.TorusGeometry(2.8 + r * 1.0, 0.08, 12, 64), accentMat);
+          ring.position.set(0, 5.0, -11.8);
+          ring.rotation.set(r * 0.6, r * 0.9, r * 0.3);
+          PostProcessingPipeline.markForSelectiveBloom(ring);
+          this.environmentGroup.add(ring);
+          this.floatingObjects.push(ring);
+        }
+        for (let i = 0; i < 4; i++) {
+          const obelisk = new THREE.Mesh(new THREE.OctahedronGeometry(0.85, 0), archMat);
+          obelisk.position.set((i % 2 === 0 ? -6.2 : 6.2), 3.0 + i * 1.8, -10.5);
+          this.environmentGroup.add(obelisk);
+          this.floatingObjects.push(obelisk);
         }
         break;
       }
@@ -515,18 +690,31 @@ export class SceneManager {
     });
   }
 
-  private styleBrazier(group: THREE.Group): void {
+  private styleBrazier(group: THREE.Group, realm: RealmConfig): void {
     const ironMat = new THREE.MeshStandardMaterial({
       color: 0x1f1d1c,
       roughness: 0.35,
       metalness: 0.85,
+    });
+    const emberColor = realm.palette.primary || 0xff9900;
+    const emberMat = new THREE.MeshStandardMaterial({
+      color: emberColor,
+      emissive: emberColor,
+      emissiveIntensity: 1.25,
+      roughness: 0.2,
+      metalness: 0.1,
     });
     group.traverse((child) => {
       const m = child as THREE.Mesh;
       if (m.isMesh) {
         m.castShadow = true;
         m.receiveShadow = true;
-        m.material = ironMat;
+        if (m.position.y > 1.2 || m.name.toLowerCase().includes('fire') || m.name.toLowerCase().includes('coal')) {
+          m.material = emberMat;
+          PostProcessingPipeline.markForSelectiveBloom(m);
+        } else {
+          m.material = ironMat;
+        }
       }
     });
   }
@@ -578,6 +766,14 @@ export class SceneManager {
       obj.rotation.y += deltaSec * 0.45;
       obj.position.y += Math.sin(elapsedSec * 1.5 + idx) * 0.004;
     });
+
+    // Parpadeo orgánico de las antorchas y braseros reales
+    if (this.pointLights.length >= 2) {
+      const flicker1 = Math.sin(elapsedSec * 6.0) * 0.25 + Math.cos(elapsedSec * 14.3) * 0.15;
+      const flicker2 = Math.cos(elapsedSec * 7.5) * 0.25 + Math.sin(elapsedSec * 12.1) * 0.15;
+      this.pointLights[0].intensity = 3.8 + flicker1;
+      this.pointLights[1].intensity = 3.8 + flicker2;
+    }
 
     if (this.particleSystem) {
       const posAttr = this.particleSystem.geometry.getAttribute('position') as THREE.BufferAttribute;

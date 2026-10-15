@@ -229,13 +229,12 @@ export class AssetLoader {
 
     const clone = template.clone(true);
 
-
-
     // Ajustar material PBR manteniendo contraste vibrante y reflejos especulares de alta fidelidad
-    const tintColor = color === 'w' ? 0xf5eee4 : 0x221c25;
-    const roughness = color === 'w' ? 0.20 : 0.24;
-    const metalness = color === 'w' ? 0.08 : 0.32;
-    const clearcoat = color === 'w' ? 0.65 : 0.75;
+    const isWhite = color === 'w';
+    const tintColor = isWhite ? 0xf5eee4 : 0x221c25;
+    const roughness = isWhite ? 0.20 : 0.24;
+    const metalness = isWhite ? 0.08 : 0.32;
+    const clearcoat = isWhite ? 0.65 : 0.75;
 
     clone.traverse((child) => {
       const mesh = child as THREE.Mesh;
@@ -253,20 +252,25 @@ export class AssetLoader {
       }
     });
 
-
+    // Anillo ornamental metálico esculpido en la base con el oro/metal noble de la facción
+    const accentColor = isWhite ? 0xd4af37 : (realm.palette.primary || 0xd4af37);
+    const accentMat = new THREE.MeshStandardMaterial({
+      color: accentColor,
+      roughness: 0.18,
+      metalness: 0.90,
+    });
+    const baseRing = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.022, 10, 32), accentMat);
+    baseRing.rotation.x = Math.PI / 2;
+    baseRing.position.y = 0.04;
+    baseRing.castShadow = true;
+    clone.add(baseRing);
 
     // Orientar caballos negros mirando hacia las blancas y viceversa
-
     if (type === 'n') {
-
       clone.rotation.y = color === 'w' ? Math.PI : 0;
-
     }
 
-
-
     return clone;
-
   }
 
 
